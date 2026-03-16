@@ -1,97 +1,78 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Iris - Offline AI Assistant 🤖
 
-# Getting Started
+Iris is a powerful, privacy-first React Native mobile application that runs Large Language Models (LLMs) completely offline on your device's hardware. It leverages `llama.cpp` (via `llama.rn`) to execute `.gguf` models directly on mobile processors without any cloud dependency.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## ✨ Key Features
+* **100% Local Inference:** Chat with AI without an internet connection. No data ever leaves your device.
+* **Hugging Face Integration:** Search, browse, and directly download `.gguf` models from Hugging Face repositories within the app.
+* **Custom Model Import:** Import your own `.gguf` files directly from your phone's local storage.
+* **Advanced File Management:** Real-time download progress tracking, cancelable downloads, and active RAM-loading toggles.
+* **Voice-Enabled:** Integrated Native Speech-to-Text (Mic) and Text-to-Speech (TTS) for hands-free interactions.
 
-## Step 1: Start Metro
+---
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## 🛑 MUST READ: The Golden Rule of Node Modules
+Because this project relies heavily on native Android C++ code (`llama.rn`, `react-native-fs`), simply running `npm install` is **not enough** when adding or updating packages. 
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+Every time you install a new node module, you MUST clean the Android build cache before running the app again. **Run these exact commands in order:**
 
-```sh
-# Using npm
-npm start
+```bash
+# 1. Install your new package
+npm install <package-name>
 
-# OR using Yarn
-yarn start
-```
+# 2. Navigate to the android folder
+cd android
 
-## Step 2: Build and run your app
+# 3. Clean the gradle cache (Windows)
+.\gradlew clean
+# (Mac/Linux users: ./gradlew clean)
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+# 4. Go back to the root folder
+cd ..
 
-### Android
+# 5. Rebuild the entire app
+npx react-native run-android
+🖥️ System & Android Studio Setup
+To build this project, you must have proper knowledge of Android Studio and the React Native CLI setup. This is not an Expo project.
 
-```sh
-# Using npm
-npm run android
+1. React Native CLI Setup:
+You must follow the official React Native CLI Quickstart guide to configure your machine:
+👉 React Native Environment Setup
 
-# OR using Yarn
-yarn android
-```
+2. Android Studio Requirements:
 
-### iOS
+Install Android Studio and configure your ANDROID_HOME environment variables.
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+Open Android Studio -> SDK Manager -> SDK Tools and ensure these are installed:
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+Android SDK Build-Tools
 
-```sh
-bundle install
-```
+NDK (Side by side) (Critical for compiling the C++ AI engine)
 
-Then, and every time you update your native dependencies, run:
+CMake (Critical for compiling llama.rn)
 
-```sh
-bundle exec pod install
-```
+🚀 How to Build and Run
+Step 1: Clone and Install
+Bash
+git clone <your-repository-url>
+cd IrisRN
+npm install
+Step 2: Start Metro
+You will need to run Metro, the JavaScript build tool for React Native.
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+Bash
+npx react-native start --reset-cache
+Step 3: Build the App
+With Metro running, open a new terminal window/pane from the root of your project, and build the Android app:
 
-```sh
-# Using npm
-npm run ios
+Bash
+npx react-native run-android
+⚠️ Important Testing Notes
+Hardware Requirements: Running .gguf models requires significant RAM. A 1B to 3B parameter model usually requires 4GB to 6GB of available RAM.
 
-# OR using Yarn
-yarn ios
-```
+Emulators: If testing on an Android Emulator, you MUST configure the AVD (Android Virtual Device) to have at least 6144 MB (6GB) of RAM. Standard emulators will crash when attempting to load the model into memory. Testing on a physical Android device is highly recommended.
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+Permissions: The app requires Storage (for downloading/reading models) and Microphone permissions (for Voice-to-Text) to function correctly.
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
 
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+***
