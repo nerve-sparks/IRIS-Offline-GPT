@@ -1,8 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
+import NerveSparksDrawer from '../components/NerveSparksDrawer';
 
 export default function AboutScreen() {
+  // 🔥 1. STATES MOVED INSIDE THE COMPONENT
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [touchStartX, setTouchStartX] = useState(0);
+
+  // 🔥 2. SWIPE LOGIC MOVED INSIDE
+  const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
+  const handleTouchEnd = (e: any) => {
+    if (e.nativeEvent.pageX - touchStartX > 50) {
+      setIsDrawerOpen(true);
+    }
+  };
+
   const features = [
     "Offline Functionality: Runs without the need for an internet connection.",
     "Privacy First: All data is processed locally on your device.",
@@ -16,7 +29,13 @@ export default function AboutScreen() {
   ];
 
   return (
-    <LinearGradient colors={['#050a14', '#051633']} style={styles.container}>
+    // 🔥 3. ATTACHED TOUCH EVENTS TO THE ROOT COMPONENT
+    <LinearGradient 
+      colors={['#050a14', '#051633']} 
+      style={styles.container}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <ScrollView contentContainerStyle={{ padding: 16 }}>
         <Text style={styles.header}>Welcome to Iris</Text>
         <Text style={styles.body}>
@@ -42,6 +61,13 @@ export default function AboutScreen() {
           </View>
         ))}
       </ScrollView>
+
+      {/* 🔥 4. PLACED THE DRAWER SAFELY AT THE BOTTOM OUTSIDE THE SCROLLVIEW */}
+      <NerveSparksDrawer 
+        visible={isDrawerOpen} 
+        onClose={() => setIsDrawerOpen(false)} 
+        activeModelName="No active model" 
+      />
     </LinearGradient>
   );
 }

@@ -2,8 +2,21 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ToastAndroid } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Slider from '@react-native-community/slider';
+import NerveSparksDrawer from '../components/NerveSparksDrawer';
 
 export default function ParametersScreen() {
+  // 🔥 1. DRAWER STATES MOVED PROPERLY INSIDE THIS COMPONENT
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [touchStartX, setTouchStartX] = useState(0);
+
+  // 🔥 2. SWIPE LOGIC
+  const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
+  const handleTouchEnd = (e: any) => {
+    if (e.nativeEvent.pageX - touchStartX > 50) {
+      setIsDrawerOpen(true);
+    }
+  };
+
   const [thread, setThread] = useState(0);
   const [temp, setTemp] = useState(0.7);
   const [topP, setTopP] = useState(0.9);
@@ -33,7 +46,13 @@ export default function ParametersScreen() {
   );
 
   return (
-    <LinearGradient colors={['#050a14', '#051633']} style={styles.container}>
+    // 🔥 3. ATTACHED SWIPE HANDLERS TO THE ROOT ELEMENT
+    <LinearGradient 
+      colors={['#050a14', '#051633']} 
+      style={styles.container}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <Text style={styles.warningText}>After changing please Save the changes</Text>
       
       <View style={styles.card}>
@@ -56,6 +75,13 @@ export default function ParametersScreen() {
           <Text style={styles.btnText}>Save</Text>
         </TouchableOpacity>
       </View>
+      
+      {/* 🔥 4. PLACED THE DRAWER SAFELY AT THE BOTTOM */}
+      <NerveSparksDrawer 
+        visible={isDrawerOpen} 
+        onClose={() => setIsDrawerOpen(false)} 
+        activeModelName="No active model" 
+      />
     </LinearGradient>
   );
 }

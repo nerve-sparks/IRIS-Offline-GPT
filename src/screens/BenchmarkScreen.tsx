@@ -4,8 +4,21 @@ import LinearGradient from 'react-native-linear-gradient';
 import DeviceInfo from 'react-native-device-info';
 import RNFS from 'react-native-fs';
 import { initLlama } from 'llama.rn';
+import NerveSparksDrawer from '../components/NerveSparksDrawer'; // 🔥 1. IMPORT DRAWER
 
 export default function BenchmarkScreen() {
+  // 🔥 2. DRAWER STATES
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [touchStartX, setTouchStartX] = useState(0);
+
+  // 🔥 3. SWIPE LOGIC
+  const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
+  const handleTouchEnd = (e: any) => {
+    if (e.nativeEvent.pageX - touchStartX > 50) {
+      setIsDrawerOpen(true);
+    }
+  };
+
   const [isRunning, setIsRunning] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [deviceInfoStr, setDeviceInfoStr] = useState('Loading hardware info...');
@@ -86,7 +99,13 @@ export default function BenchmarkScreen() {
   };
 
   return (
-    <LinearGradient colors={['#050a14', '#051633']} style={styles.container}>
+    // 🔥 4. ATTACH TOUCH EVENTS TO ROOT ELEMENT
+    <LinearGradient 
+      colors={['#050a14', '#051633']} 
+      style={styles.container}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <ScrollView contentContainerStyle={{ padding: 16, alignItems: 'center' }}>
         
         <Text style={styles.header}>Benchmark Information</Text>
@@ -156,6 +175,13 @@ export default function BenchmarkScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* 🔥 5. PLACE DRAWER AT THE VERY END OF ROOT VIEW */}
+      <NerveSparksDrawer 
+        visible={isDrawerOpen} 
+        onClose={() => setIsDrawerOpen(false)} 
+        activeModelName="No active model" 
+      />
     </LinearGradient>
   );
 }

@@ -1,12 +1,14 @@
 // import React, { useState, useEffect, useRef } from 'react';
-// import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Image } from 'react-native';
+// import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Image, ToastAndroid } from 'react-native';
 // import { useIsFocused } from '@react-navigation/native';
 // import RNFS from 'react-native-fs';
 // import { initLlama } from 'llama.rn';
 // import Voice, { SpeechResultsEvent } from '@react-native-voice/voice';
 // import Tts from 'react-native-tts';
 // import LinearGradient from 'react-native-linear-gradient';
+// import AsyncStorage from '@react-native-async-storage/async-storage';
 // import { ALL_MODELS, checkFileExists, downloadModel, IrisModel } from '../services/ModelService';
+// import NerveSparksDrawer from '../components/NerveSparksDrawer';
 
 // interface Message {
 //   id: string;
@@ -27,12 +29,66 @@
 //   const [needsModel, setNeedsModel] = useState(false);
 //   const [downloading, setDownloading] = useState<{ [key: string]: boolean }>({});
 //   const [progresses, setProgresses] = useState<{ [key: string]: number }>({});
+  
 //   const [llamaContext, setLlamaContext] = useState<any>(null);
+//   const [currentLoadedPath, setCurrentLoadedPath] = useState<string | null>(null);
+
 //   const [isGenerating, setIsGenerating] = useState(false);
 //   const [isListening, setIsListening] = useState(false);
+
+//   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+//   const [touchStartX, setTouchStartX] = useState(0);
+//   const [currentActiveModel, setCurrentActiveModel] = useState("No active model");
   
 //   const isFocused = useIsFocused();
 //   const flatListRef = useRef<FlatList>(null);
+
+//   // 🔥 MOVED OUTSIDE USE-EFFECT SO DOWNLOAD BUTTON CAN TRIGGER IT
+//   const loadEngine = async () => {
+//     let activeModelPath = null;
+//     let modelNameForDrawer = "No active model";
+
+//     const savedModelName = await AsyncStorage.getItem('ACTIVE_MODEL_NAME');
+
+//     if (savedModelName) {
+//       const modelObj = ALL_MODELS.find(m => m.name === savedModelName);
+//       const potentialPath = modelObj ? modelObj.destination : savedModelName;
+//       const fullPath = `${RNFS.DocumentDirectoryPath}/${potentialPath}`;
+      
+//       if (await RNFS.exists(fullPath)) {
+//         activeModelPath = fullPath;
+//         modelNameForDrawer = savedModelName;
+//       }
+//     }
+
+//     if (!activeModelPath) {
+//       for (const model of ALL_MODELS) {
+//         if (await checkFileExists(model.destination)) {
+//           activeModelPath = `${RNFS.DocumentDirectoryPath}/${model.destination}`;
+//           modelNameForDrawer = model.name;
+//           break;
+//         }
+//       }
+//     }
+    
+//     setCurrentActiveModel(modelNameForDrawer);
+
+//     if (!activeModelPath) return setNeedsModel(true);
+//     setNeedsModel(false);
+    
+//     if (activeModelPath !== currentLoadedPath) {
+//       if (llamaContext) {
+//         try { await llamaContext.release(); } catch(e) {}
+//       }
+//       try {
+//         const ctx = await initLlama({ model: activeModelPath, use_mlock: true, n_ctx: 2048 });
+//         setLlamaContext(ctx);
+//         setCurrentLoadedPath(activeModelPath);
+//       } catch (err) { 
+//         console.error("Engine failed:", err); 
+//       }
+//     }
+//   };
 
 //   useEffect(() => {
 //     Tts.setDefaultLanguage('en-US');
@@ -43,25 +99,6 @@
 //     Voice.onSpeechError = () => setIsListening(false);
 //     Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
 //     Voice.onSpeechResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
-
-//     const loadEngine = async () => {
-//       let activeModelPath = null;
-//       for (const model of ALL_MODELS) {
-//         if (await checkFileExists(model.destination)) {
-//           activeModelPath = `${RNFS.DocumentDirectoryPath}/${model.destination}`;
-//           break;
-//         }
-//       }
-//       if (!activeModelPath) return setNeedsModel(true);
-//       setNeedsModel(false);
-      
-//       if (!llamaContext) {
-//         try {
-//           const ctx = await initLlama({ model: activeModelPath, use_mlock: true, n_ctx: 2048 });
-//           setLlamaContext(ctx);
-//         } catch (err) { console.error("Engine failed:", err); }
-//       }
-//     };
 
 //     if (isFocused) loadEngine();
 //     return () => { Voice.destroy().then(Voice.removeAllListeners); Tts.stop(); };
@@ -87,10 +124,47 @@
 
 //   const handleDownload = async (model: IrisModel) => {
 //     setDownloading(prev => ({ ...prev, [model.name]: true }));
+    
+//     // 🔥 FIX 1: SAFE DELETE - If file is locked, ignore the error and keep downloading
 //     try {
+//       const destPath = `${RNFS.DocumentDirectoryPath}/${model.destination}`;
+//       if (await RNFS.exists(destPath)) {
+//         await RNFS.unlink(destPath);
+//       }
+//     } catch (cleanupError) {
+//       console.log("File is locked by engine, attempting to overwrite...");
+//     }
+
+//     try {
+//       // 🔥 FIX 2: START DOWNLOAD PROPERLY
 //       await downloadModel(model, (p) => setProgresses(prev => ({ ...prev, [model.name]: Math.round(p * 100) })));
+      
+//       await AsyncStorage.setItem('ACTIVE_MODEL_NAME', model.name);
 //       setNeedsModel(false); 
-//     } finally { setDownloading(prev => ({ ...prev, [model.name]: false })); }
+      
+//       ToastAndroid.show("Download Complete! Loading AI...", ToastAndroid.SHORT);
+//       loadEngine(); // Force reload now that file is complete
+
+//     } catch (error: any) {
+//       console.log("Download stopped or failed", error);
+//       // 🔥 FIX 3: SHOW EXACT ERROR IF IT FAILS
+//       ToastAndroid.show(`Failed: ${error.message || "Unknown error"}`, ToastAndroid.LONG);
+//     } finally { 
+//       setDownloading(prev => ({ ...prev, [model.name]: false })); 
+//     }
+//   };
+
+//   const cancelDownload = async (model: IrisModel) => {
+//     setDownloading(prev => ({ ...prev, [model.name]: false }));
+//     setProgresses(prev => ({ ...prev, [model.name]: 0 }));
+//     ToastAndroid.show("Download cancelled", ToastAndroid.SHORT);
+
+//     try {
+//       const destPath = `${RNFS.DocumentDirectoryPath}/${model.destination}`;
+//       if (await RNFS.exists(destPath)) {
+//         await RNFS.unlink(destPath);
+//       }
+//     } catch (e) { console.log("Cleanup failed", e); }
 //   };
 
 //   const sendMessage = async (text: string = inputText) => {
@@ -128,8 +202,20 @@
 //     finally { setIsGenerating(false); }
 //   };
 
+//   const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
+//   const handleTouchEnd = (e: any) => {
+//     if (e.nativeEvent.pageX - touchStartX > 50) {
+//       setIsDrawerOpen(true);
+//     }
+//   };
+
 //   return (
-//     <LinearGradient colors={['#050a14', '#051633']} style={styles.container}>
+//     <LinearGradient 
+//       colors={['#050a14', '#051633']} 
+//       style={styles.container}
+//       onTouchStart={handleTouchStart} 
+//       onTouchEnd={handleTouchEnd}     
+//     >
 //       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         
 //         {needsModel && isFocused && (
@@ -140,11 +226,11 @@
 //                 <View key={model.name} style={styles.modelCard}>
 //                   <Text style={styles.modelNameText}>{model.name}</Text>
 //                   <TouchableOpacity 
-//                     style={[styles.downloadBtn, downloading[model.name] && styles.downloadBtnActive]}
-//                     onPress={() => !downloading[model.name] && handleDownload(model)}
+//                     style={[styles.downloadBtn, downloading[model.name] && { backgroundColor: '#ef4444' }]}
+//                     onPress={() => downloading[model.name] ? cancelDownload(model) : handleDownload(model)}
 //                   >
 //                     <Text style={styles.downloadBtnText}>
-//                       {downloading[model.name] ? `Downloading... ${progresses[model.name] || 0}%` : 'Download'}
+//                       {downloading[model.name] ? `Stop Download (${progresses[model.name] || 0}%)` : 'Download'}
 //                     </Text>
 //                   </TouchableOpacity>
 //                 </View>
@@ -160,6 +246,7 @@
 //             <TouchableOpacity 
 //               onPress={() => { Keyboard.dismiss(); navigation.navigate('Settings'); }}
 //               style={{ padding: 10 }}
+//               hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
 //             >
 //               <Image source={require('../assets/icons/settings.png')} style={styles.headerIconImage} />
 //             </TouchableOpacity>
@@ -167,6 +254,7 @@
 //             <TouchableOpacity 
 //               onPress={clearChat}
 //               style={{ padding: 10 }}
+//               hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
 //             >
 //               <Image source={require('../assets/icons/new_chat.png')} style={styles.headerIconImage} />
 //             </TouchableOpacity>
@@ -223,6 +311,13 @@
 //           </View>
 //         </View>
 //       </KeyboardAvoidingView>
+      
+//       <NerveSparksDrawer 
+//         visible={isDrawerOpen} 
+//         onClose={() => setIsDrawerOpen(false)} 
+//         activeModelName={currentActiveModel} 
+//       />
+
 //     </LinearGradient>
 //   );
 // }
@@ -233,7 +328,6 @@
 //   headerTitle: { color: '#ffffff', fontSize: 28, fontWeight: '500' },
 //   headerIcons: { flexDirection: 'row', gap: 24 },
   
-//   // 🔥 New Icon Styles
 //   headerIconImage: { width: 24, height: 24, tintColor: '#ffffff' },
 //   micIconImage: { width: 24, height: 24, tintColor: '#ffffff', marginRight: 12 },
 //   sendIconImage: { width: 24, height: 24, tintColor: '#ffffff', marginLeft: 12 },
@@ -257,19 +351,22 @@
 //   modelCard: { backgroundColor: '#0f172a', width: '100%', borderRadius: 12, padding: 16, marginBottom: 12, alignItems: 'center' },
 //   modelNameText: { color: '#94a3b8', fontSize: 14, marginBottom: 12, textAlign: 'center' },
 //   downloadBtn: { backgroundColor: '#2563EB', width: '100%', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-//   downloadBtnActive: { backgroundColor: '#475569' },
 //   downloadBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 }
 // });
 
+
+
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Image, ToastAndroid } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import RNFS from 'react-native-fs';
 import { initLlama } from 'llama.rn';
 import Voice, { SpeechResultsEvent } from '@react-native-voice/voice';
 import Tts from 'react-native-tts';
 import LinearGradient from 'react-native-linear-gradient';
-import { ALL_MODELS, checkFileExists, downloadModel, IrisModel } from '../services/ModelService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ALL_MODELS, downloadModel, IrisModel } from '../services/ModelService';
+import NerveSparksDrawer from '../components/NerveSparksDrawer';
 
 interface Message {
   id: string;
@@ -290,12 +387,71 @@ export default function ChatScreen({ navigation }: any) {
   const [needsModel, setNeedsModel] = useState(false);
   const [downloading, setDownloading] = useState<{ [key: string]: boolean }>({});
   const [progresses, setProgresses] = useState<{ [key: string]: number }>({});
+  
   const [llamaContext, setLlamaContext] = useState<any>(null);
+  const [currentLoadedPath, setCurrentLoadedPath] = useState<string | null>(null);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [isListening, setIsListening] = useState(false);
+
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [touchStartX, setTouchStartX] = useState(0);
+  const [currentActiveModel, setCurrentActiveModel] = useState("No active model");
   
   const isFocused = useIsFocused();
   const flatListRef = useRef<FlatList>(null);
+
+  const loadEngine = async () => {
+    let activeModelPath = null;
+    let modelNameForDrawer = "No active model";
+
+    const savedModelName = await AsyncStorage.getItem('ACTIVE_MODEL_NAME');
+
+    if (savedModelName) {
+      const modelObj = ALL_MODELS.find(m => m.name === savedModelName);
+      const potentialPath = modelObj ? modelObj.destination : savedModelName;
+      const fullPath = `${RNFS.DocumentDirectoryPath}/${potentialPath}`;
+      
+      if (await RNFS.exists(fullPath)) {
+        activeModelPath = fullPath;
+        modelNameForDrawer = savedModelName;
+      }
+    }
+
+    if (!activeModelPath) {
+      try {
+        const files = await RNFS.readDir(RNFS.DocumentDirectoryPath);
+        const ggufFile = files.find(f => f.name.endsWith('.gguf'));
+        if (ggufFile) {
+          activeModelPath = `${RNFS.DocumentDirectoryPath}/${ggufFile.name}`;
+          modelNameForDrawer = ggufFile.name;
+          await AsyncStorage.setItem('ACTIVE_MODEL_NAME', ggufFile.name);
+        }
+      } catch (e) { console.log("Failed to scan directory", e); }
+    }
+    
+    setCurrentActiveModel(modelNameForDrawer);
+
+    if (!activeModelPath) {
+      setNeedsModel(true);
+      return; 
+    }
+    
+    setNeedsModel(false);
+    
+    if (activeModelPath !== currentLoadedPath) {
+      if (llamaContext) {
+        try { await llamaContext.release(); } catch(e) {}
+      }
+      try {
+        const ctx = await initLlama({ model: activeModelPath, use_mlock: true, n_ctx: 2048 });
+        setLlamaContext(ctx);
+        setCurrentLoadedPath(activeModelPath);
+      } catch (err) { 
+        console.error("Engine failed:", err); 
+      }
+    }
+  };
 
   useEffect(() => {
     Tts.setDefaultLanguage('en-US');
@@ -306,25 +462,6 @@ export default function ChatScreen({ navigation }: any) {
     Voice.onSpeechError = () => setIsListening(false);
     Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
     Voice.onSpeechResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
-
-    const loadEngine = async () => {
-      let activeModelPath = null;
-      for (const model of ALL_MODELS) {
-        if (await checkFileExists(model.destination)) {
-          activeModelPath = `${RNFS.DocumentDirectoryPath}/${model.destination}`;
-          break;
-        }
-      }
-      if (!activeModelPath) return setNeedsModel(true);
-      setNeedsModel(false);
-      
-      if (!llamaContext) {
-        try {
-          const ctx = await initLlama({ model: activeModelPath, use_mlock: true, n_ctx: 2048 });
-          setLlamaContext(ctx);
-        } catch (err) { console.error("Engine failed:", err); }
-      }
-    };
 
     if (isFocused) loadEngine();
     return () => { Voice.destroy().then(Voice.removeAllListeners); Tts.stop(); };
@@ -350,10 +487,44 @@ export default function ChatScreen({ navigation }: any) {
 
   const handleDownload = async (model: IrisModel) => {
     setDownloading(prev => ({ ...prev, [model.name]: true }));
+    
+    try {
+      const destPath = `${RNFS.DocumentDirectoryPath}/${model.destination}`;
+      if (await RNFS.exists(destPath)) {
+        await RNFS.unlink(destPath);
+      }
+    } catch (cleanupError) {
+      console.log("File is locked by engine, attempting to overwrite...");
+    }
+
     try {
       await downloadModel(model, (p) => setProgresses(prev => ({ ...prev, [model.name]: Math.round(p * 100) })));
+      
+      await AsyncStorage.setItem('ACTIVE_MODEL_NAME', model.name);
       setNeedsModel(false); 
-    } finally { setDownloading(prev => ({ ...prev, [model.name]: false })); }
+      
+      ToastAndroid.show("Download Complete! Loading AI...", ToastAndroid.SHORT);
+      loadEngine(); 
+
+    } catch (error: any) {
+      console.log("Download stopped or failed", error);
+      ToastAndroid.show(`Failed: ${error.message || "Unknown error"}`, ToastAndroid.LONG);
+    } finally { 
+      setDownloading(prev => ({ ...prev, [model.name]: false })); 
+    }
+  };
+
+  const cancelDownload = async (model: IrisModel) => {
+    setDownloading(prev => ({ ...prev, [model.name]: false }));
+    setProgresses(prev => ({ ...prev, [model.name]: 0 }));
+    ToastAndroid.show("Download cancelled", ToastAndroid.SHORT);
+
+    try {
+      const destPath = `${RNFS.DocumentDirectoryPath}/${model.destination}`;
+      if (await RNFS.exists(destPath)) {
+        await RNFS.unlink(destPath);
+      }
+    } catch (e) { console.log("Cleanup failed", e); }
   };
 
   const sendMessage = async (text: string = inputText) => {
@@ -391,9 +562,26 @@ export default function ChatScreen({ navigation }: any) {
     finally { setIsGenerating(false); }
   };
 
+  const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
+  const handleTouchEnd = (e: any) => {
+    if (e.nativeEvent.pageX - touchStartX > 50) {
+      setIsDrawerOpen(true);
+    }
+  };
+
   return (
-    <LinearGradient colors={['#050a14', '#051633']} style={styles.container}>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <LinearGradient 
+      colors={['#050a14', '#051633']} 
+      style={styles.container}
+      onTouchStart={handleTouchStart} 
+      onTouchEnd={handleTouchEnd}     
+    >
+      {/* 🔥 FIX: ADDED PROPER BEHAVIOR AND OFFSET FOR ANDROID KEYBOARD */}
+      <KeyboardAvoidingView 
+        style={styles.container} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
         
         {needsModel && isFocused && (
           <View style={[StyleSheet.absoluteFill, styles.modalOverlay]}>
@@ -403,11 +591,11 @@ export default function ChatScreen({ navigation }: any) {
                 <View key={model.name} style={styles.modelCard}>
                   <Text style={styles.modelNameText}>{model.name}</Text>
                   <TouchableOpacity 
-                    style={[styles.downloadBtn, downloading[model.name] && styles.downloadBtnActive]}
-                    onPress={() => !downloading[model.name] && handleDownload(model)}
+                    style={[styles.downloadBtn, downloading[model.name] && { backgroundColor: '#ef4444' }]}
+                    onPress={() => downloading[model.name] ? cancelDownload(model) : handleDownload(model)}
                   >
                     <Text style={styles.downloadBtnText}>
-                      {downloading[model.name] ? `Downloading... ${progresses[model.name] || 0}%` : 'Download'}
+                      {downloading[model.name] ? `Stop Download (${progresses[model.name] || 0}%)` : 'Download'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -420,7 +608,6 @@ export default function ChatScreen({ navigation }: any) {
           <Text style={styles.headerTitle}>Iris</Text>
           <View style={styles.headerIcons}>
             
-            {/* 🔥 ADDED hitSlop TO MAKE IT SUPER EASY TO CLICK WITHOUT CHANGING LOGIC */}
             <TouchableOpacity 
               onPress={() => { Keyboard.dismiss(); navigation.navigate('Settings'); }}
               style={{ padding: 10 }}
@@ -429,7 +616,6 @@ export default function ChatScreen({ navigation }: any) {
               <Image source={require('../assets/icons/settings.png')} style={styles.headerIconImage} />
             </TouchableOpacity>
 
-            {/* 🔥 ADDED hitSlop HERE TOO JUST IN CASE */}
             <TouchableOpacity 
               onPress={clearChat}
               style={{ padding: 10 }}
@@ -490,6 +676,13 @@ export default function ChatScreen({ navigation }: any) {
           </View>
         </View>
       </KeyboardAvoidingView>
+      
+      <NerveSparksDrawer 
+        visible={isDrawerOpen} 
+        onClose={() => setIsDrawerOpen(false)} 
+        activeModelName={currentActiveModel} 
+      />
+
     </LinearGradient>
   );
 }
@@ -523,6 +716,5 @@ const styles = StyleSheet.create({
   modelCard: { backgroundColor: '#0f172a', width: '100%', borderRadius: 12, padding: 16, marginBottom: 12, alignItems: 'center' },
   modelNameText: { color: '#94a3b8', fontSize: 14, marginBottom: 12, textAlign: 'center' },
   downloadBtn: { backgroundColor: '#2563EB', width: '100%', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  downloadBtnActive: { backgroundColor: '#475569' },
   downloadBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 }
 });
