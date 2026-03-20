@@ -26,6 +26,7 @@
     "react-native-device-info": "^15.0.2",
     "react-native-fs": "^2.20.0",
     "react-native-linear-gradient": "^2.8.3",
+    "react-native-markdown-display": "^7.0.2",
     "react-native-safe-area-context": "^5.7.0",
     "react-native-screens": "^4.24.0",
     "react-native-tts": "^4.1.1"

@@ -271,23 +271,27 @@ export default function ModelsScreen({ navigation }: any) {
 
       for (const model of ALL_MODELS) {
         const path = `${RNFS.DocumentDirectoryPath}/${model.destination}`;
-        if (await RNFS.exists(path)) states[model.name] = { exists: true, size: formatBytes(Number((await RNFS.stat(path)).size)) };
-        else states[model.name] = { exists: false, size: '0 Bytes' };
+        if (await RNFS.exists(path)) {
+          states[model.name] = { exists: true, size: formatBytes(Number((await RNFS.stat(path)).size)) };
+        } else {
+          states[model.name] = { exists: false, size: '0 Bytes' };
+        }
       }
 
       for (const file of ggufFiles) {
-        if (!ALL_MODELS.find(m => m.name === file.name)) {
+        // 🔥 FIX: MATCH BY DESTINATION INSTEAD OF NAME
+        if (!ALL_MODELS.find(m => m.destination === file.name)) {
           states[file.name] = { exists: true, size: formatBytes(Number(file.size)) };
           custom.push(file.name);
         }
       }
+      
       setFileStates(states);
       setCustomModels(custom);
       
       const savedModel = await AsyncStorage.getItem('ACTIVE_MODEL_NAME');
       if (savedModel) setActiveModel(savedModel);
 
-      // 🔥 FIX: LOAD SAVED DEFAULT MODEL ON STARTUP
       const savedDefault = await AsyncStorage.getItem('DEFAULT_MODEL_NAME');
       if (savedDefault) setDefaultModel(savedDefault);
 

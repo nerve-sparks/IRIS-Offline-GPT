@@ -6,22 +6,23 @@ export interface IrisModel {
   destination: string;
 }
 
-// Ported directly from your Kotlin file!
+// 🔥 The Latest & Smartest SLMs for Mobile (2026)
 export const ALL_MODELS: IrisModel[] = [
+  
   {
-    name: "Llama-3.2-1B-Instruct-Q6_K_L.gguf",
-    source: "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q6_K_L.gguf?download=true",
-    destination: "Llama-3.2-1B-Instruct-Q6_K_L.gguf"
+    name: "Llama-3.2 (3B) - Meta's Mobile Beast",
+    source: "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf?download=true",
+    destination: "llama-3.2-3b-q4.gguf"
   },
   {
-    name: "Llama-3.2-3B-Instruct-Q4_K_L.gguf",
-    source: "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_L.gguf?download=true",
-    destination: "Llama-3.2-3B-Instruct-Q4_K_L.gguf"
+    name: "Qwen 2.5 (3B) - Best All-Rounder",
+    source: "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf?download=true",
+    destination: "qwen-2.5-3b-q4.gguf"
   },
   {
-    name: "stablelm-2-1_6b-chat.Q4_K_M.imx.gguf",
-    source: "https://huggingface.co/Crataco/stablelm-2-1_6b-chat-imatrix-GGUF/resolve/main/stablelm-2-1_6b-chat.Q4_K_M.imx.gguf?download=true",
-    destination: "stablelm-2-1_6b-chat.Q4_K_M.imx.gguf"
+    name: "Gemma-2 (2B) - Super Smart by Google",
+    source: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf?download=true",
+    destination: "gemma-2-2b-q4.gguf"
   }
 ];
 
