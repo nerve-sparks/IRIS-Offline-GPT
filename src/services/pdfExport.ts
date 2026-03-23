@@ -137,7 +137,7 @@ export async function exportConversationAsPdf(conv: Conversation): Promise<strin
     y -= 6;
   }
 
-  const base64 = await pdfDoc.saveAsBase64();
+  const base64 = await pdfDoc.saveAsBase64({ useObjectStreams: false });
   const safeFileTitle = conv.title.replace(/[^a-z0-9]/gi, '_').slice(0, 40) || 'conversation';
   const baseDir =
     Platform.OS === 'android' && RNFS.DownloadDirectoryPath

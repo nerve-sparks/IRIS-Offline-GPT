@@ -6,7 +6,7 @@ import React, { useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet,
   Animated, Dimensions, TouchableWithoutFeedback, TextInput,
-  StatusBar, Alert, Modal, ScrollView, Linking, Image, Share,
+  StatusBar, Alert, Modal, ScrollView, Linking, Image, Share, Switch,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {
@@ -15,6 +15,7 @@ import {
   togglePin, moveToFolder, createFolder, exportConversation,
   Conversation,
 } from '../services/conversationStore';
+import { useIncognito } from '../services/incognitoContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = SCREEN_WIDTH * 0.82;
@@ -45,6 +46,7 @@ export default function IrisSidebar({
   visible, onClose, onSelectConversation, onNewChat,
   activeModelName = 'No active model',
 }: Props) {
+  const { isIncognito, toggleIncognito } = useIncognito();
   const conversations = useConversations();
   const folders = useFolders();
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
@@ -299,6 +301,32 @@ export default function IrisSidebar({
 
         {/* ── FOOTER — NerveSparks links (company's original content) ── */}
         <View style={styles.footer}>
+
+          {/* ── Incognito Mode Toggle ── */}
+          <TouchableOpacity
+            style={[styles.incognitoRow, isIncognito && styles.incognitoRowActive]}
+            onPress={toggleIncognito}
+            activeOpacity={0.8}
+          >
+            <View style={styles.incognitoLeft}>
+              <Text style={styles.incognitoIcon}>🕶️</Text>
+              <View>
+                <Text style={[styles.incognitoLabel, isIncognito && styles.incognitoLabelActive]}>
+                  Incognito Mode
+                </Text>
+                {isIncognito && (
+                  <Text style={styles.incognitoSub}>Chat won&apos;t be saved</Text>
+                )}
+              </View>
+            </View>
+            <Switch
+              value={isIncognito}
+              onValueChange={toggleIncognito}
+              trackColor={{ false: '#2d3748', true: '#7C3AED' }}
+              thumbColor={isIncognito ? '#c4b5fd' : '#6b7280'}
+            />
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.footerBtn}
             onPress={() => Linking.openURL('https://github.com/nerve-sparks/iris_android')}
@@ -475,6 +503,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20,
     borderTopWidth: 1, borderTopColor: '#1e293b',
   },
+
+  // Incognito toggle
+  incognitoRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#1a2233', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10,
+    borderWidth: 1, borderColor: '#2d3748',
+  },
+  incognitoRowActive: {
+    borderColor: '#7C3AED', backgroundColor: 'rgba(124,58,237,0.12)',
+  },
+  incognitoLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  incognitoIcon: { fontSize: 20 },
+  incognitoLabel: { color: '#6b7280', fontSize: 13, fontWeight: '600' },
+  incognitoLabelActive: { color: '#c4b5fd' },
+  incognitoSub: { color: '#7C3AED', fontSize: 11, marginTop: 1 },
   footerBtn: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',

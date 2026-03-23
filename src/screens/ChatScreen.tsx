@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet,
-  KeyboardAvoidingView, Platform, Keyboard, Image, ToastAndroid,
+  KeyboardAvoidingView, Platform, Keyboard, Image, ToastAndroid, Alert,
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import RNFS from 'react-native-fs';
@@ -22,6 +22,11 @@ import {
   getConversation,
 } from '../services/conversationStore';
 import { showConversationExportMenu } from '../services/conversationExport';
+import { useIncognito } from '../services/incognitoContext';
+import {
+  addTempMessage,
+  endTempSession,
+} from '../services/tempChatStore';
 // ── Inline PDF/HTML builder — generates a shareable HTML file, no extra deps
 const buildConversationFile = async (conv: Conversation): Promise<string> => {
   const rows = conv.messages.map(m => {
@@ -71,6 +76,8 @@ const PROMPTS = [
 ];
 
 export default function ChatScreen({ navigation }: any) {
+  const { isIncognito, disableIncognito } = useIncognito();
+
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [needsModel, setNeedsModel] = useState(false);
@@ -86,6 +93,14 @@ export default function ChatScreen({ navigation }: any) {
   const [currentActiveModel, setCurrentActiveModel] = useState("No active model");
   const isFocused = useIsFocused();
   const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    if (!isIncognito) {
+      activeConversationId.current = null;
+      setMessages([]);
+      setInputText('');
+    }
+  }, [isIncognito]);
 
   const loadEngine = async () => {
     let activeModelPath = null;
@@ -144,6 +159,7 @@ export default function ChatScreen({ navigation }: any) {
   const clearChat = () => {
     Keyboard.dismiss();
     activeConversationId.current = null;
+    if (isIncognito) { endTempSession(); }
     setTimeout(() => {
       if (isGenerating && llamaContext) { try { llamaContext.stopCompletion(); } catch (e) {} }
       Tts.stop();
@@ -154,7 +170,11 @@ export default function ChatScreen({ navigation }: any) {
   };
 
   // Load conversation messages from sidebar selection
+  // Automatically exits incognito mode if active — saved chat takes over.
   const handleSelectConversation = (conv: Conversation) => {
+    if (isIncognito) {
+      disableIncognito(); // wipes temp store, banner hides via useEffect
+    }
     activeConversationId.current = conv.id;
     pendingFolderId.current = conv.folderId;
     const mapped: Message[] = conv.messages.map(m => ({
@@ -170,6 +190,10 @@ export default function ChatScreen({ navigation }: any) {
   };
 
   const handleExportCurrentConversation = () => {
+    if (isIncognito) {
+      ToastAndroid.show('Export not available in Incognito mode.', ToastAndroid.SHORT);
+      return;
+    }
     const convId = activeConversationId.current;
     if (!convId) {
       ToastAndroid.show('No conversation to export yet.', ToastAndroid.SHORT);
@@ -208,6 +232,10 @@ export default function ChatScreen({ navigation }: any) {
   };
 
   const handleTogglePinConversation = () => {
+    if (isIncognito) {
+      ToastAndroid.show('Pinning not available in Incognito mode.', ToastAndroid.SHORT);
+      return;
+    }
     const convId = activeConversationId.current;
     if (!convId) {
       ToastAndroid.show('No conversation to pin yet.', ToastAndroid.SHORT);
@@ -256,7 +284,46 @@ export default function ChatScreen({ navigation }: any) {
     if (isListening) await Voice.stop();
     Tts.stop();
 
-    // Auto-create a conversation on the first message of a blank chat
+    // ── INCOGNITO PATH — RAM only, no conversationStore calls ────────────────
+    if (isIncognito) {
+      const tempUser = addTempMessage(text, true);
+      const botMsgId = `tmp_bot_${Date.now()}`;
+      const tempBot: Message = { id: botMsgId, text: '', isUser: false,
+        timestamp: new Date().toISOString(), isStarred: false, isPinned: false };
+      setMessages(prev => [...prev, { ...tempUser, isUser: true }, tempBot]);
+      setInputText('');
+      setIsGenerating(true);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+
+      if (!llamaContext) {
+        const errText = 'Error: AI not loaded.';
+        setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, text: errText } : m));
+        addTempMessage(errText, false);
+        setIsGenerating(false);
+        return;
+      }
+      const formattedPrompt = `<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n${text}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`;
+      let fullResponse = '';
+      try {
+        await llamaContext.completion(
+          { prompt: formattedPrompt, n_predict: 256, temperature: 0.7 },
+          (result: any) => {
+            fullResponse += result.token;
+            setMessages(prev => prev.map(m =>
+              m.id === botMsgId ? { ...m, text: m.text + result.token } : m
+            ));
+          }
+        );
+        if (fullResponse.trim().length > 0) {
+          Tts.speak(fullResponse.replace(/<[^>]*>?/gm, ''));
+          addTempMessage(fullResponse, false); // RAM only
+        }
+      } catch (err) { console.error('Incognito generation crashed:', err); }
+      finally { setIsGenerating(false); }
+      return;
+    }
+
+    // ── NORMAL PATH — persists to conversationStore + AsyncStorage ───────────
     if (!activeConversationId.current) {
       const conv = createConversation(pendingFolderId.current);
       activeConversationId.current = conv.id;
@@ -360,12 +427,12 @@ export default function ChatScreen({ navigation }: any) {
             style={styles.hamburgerBtn}
             hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
           >
-            <View style={styles.hamburgerLine} />
-            <View style={styles.hamburgerLine} />
-            <View style={styles.hamburgerLine} />
+            <View style={[styles.hamburgerLine, isIncognito && styles.hamburgerLineIncognito]} />
+            <View style={[styles.hamburgerLine, isIncognito && styles.hamburgerLineIncognito]} />
+            <View style={[styles.hamburgerLine, isIncognito && styles.hamburgerLineIncognito]} />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Iris</Text>
+          <Text style={[styles.headerTitle, isIncognito && styles.headerTitleIncognito]}>Iris</Text>
 
           <View style={styles.headerIcons}>
             <TouchableOpacity
@@ -401,6 +468,14 @@ export default function ChatScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* ── Incognito Banner ── */}
+        {isIncognito && (
+          <View style={styles.incognitoBanner}>
+          <Text style={styles.incognitoIcon}>🕶️</Text>
+          <Text style={styles.incognitoText}>Incognito — this chat won’t be saved</Text>
+          </View>
+        )}
 
         {messages.length === 0 ? (
           <View style={styles.emptyChatContainer}>
@@ -536,7 +611,19 @@ const styles = StyleSheet.create({
   },
   hamburgerBtn: { padding: 10, gap: 5, justifyContent: 'center' },
   hamburgerLine: { width: 22, height: 2, backgroundColor: '#ffffff', borderRadius: 2 },
+  hamburgerLineIncognito: { backgroundColor: '#c4b5fd' },
   headerTitle: { color: '#ffffff', fontSize: 28, fontWeight: '500' },
+  headerTitleIncognito: { color: '#c4b5fd' },
+  // Incognito banner
+  incognitoBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(88,28,135,0.35)',
+    borderWidth: 1, borderColor: 'rgba(167,139,250,0.3)',
+    marginHorizontal: 12, borderRadius: 10, gap: 6,
+    paddingHorizontal: 12,
+  },
+  incognitoIcon: { fontSize: 14 },
+  incognitoText: { color: '#c4b5fd', fontSize: 12, fontWeight: '500', letterSpacing: 0.3 },
   headerIcons: { flexDirection: 'row', gap: 24 },
   exportText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
   headerIconImage: { width: 24, height: 24, tintColor: '#ffffff' },

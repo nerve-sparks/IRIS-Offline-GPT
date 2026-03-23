@@ -1,8 +1,9 @@
-// App.tsx — Updated with Conversation Management Feature
+// App.tsx — Updated with Conversation Management Feature + Incognito Mode
 import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { loadStore } from './src/services/conversationStore';
+import { IncognitoProvider } from './src/services/incognitoContext';
 
 // Existing screens
 import ChatScreen from './src/screens/ChatScreen';
@@ -36,48 +37,50 @@ export default function App() {
   if (!ready) return null;
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={headerStyle}>
+    <IncognitoProvider>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={headerStyle}>
 
-        {/* ── Chat is HOME screen (like ChatGPT) ── */}
-        <Stack.Screen
-          name="Chat"
-          component={ChatScreen}
-          options={{ headerShown: false }}
-        />
+          {/* ── Chat is HOME screen (like ChatGPT) ── */}
+          <Stack.Screen
+            name="Chat"
+            component={ChatScreen}
+            options={{ headerShown: false }}
+          />
 
-        {/* ── Conversation List (opened from chat via 📝 button) ── */}
-        <Stack.Screen
-          name="ConversationList"
-          component={ConversationListScreen}
-          options={{ headerShown: false }}
-        />
+          {/* ── Conversation List (opened from chat via 📝 button) ── */}
+          <Stack.Screen
+            name="ConversationList"
+            component={ConversationListScreen}
+            options={{ headerShown: false }}
+          />
 
-        {/* ── Opening a conversation from list → goes to Chat ── */}
-        <Stack.Screen
-          name="ConversationChat"
-          component={ConversationChatScreen}
-          options={{ headerShown: false }}
-        />
+          {/* ── Opening a conversation from list → goes to Chat ── */}
+          <Stack.Screen
+            name="ConversationChat"
+            component={ConversationChatScreen}
+            options={{ headerShown: false }}
+          />
 
-        <Stack.Screen
-          name="FoldersScreen"
-          component={FoldersScreen}
-          options={{ title: 'Folders' }}
-        />
+          <Stack.Screen
+            name="FoldersScreen"
+            component={FoldersScreen}
+            options={{ title: 'Folders' }}
+          />
 
-        {/* ── Existing Screens ── */}
-        <Stack.Screen name="Settings" component={SettingsScreen} />
-        <Stack.Screen name="Models" component={ModelsScreen} />
-        <Stack.Screen name="Parameters" component={ParametersScreen} />
-        <Stack.Screen name="Benchmark" component={BenchmarkScreen} />
-        <Stack.Screen name="About" component={AboutScreen} />
-        <Stack.Screen
-          name="SearchResult"
-          component={SearchResultScreen}
-          options={{ title: 'Search Models' }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+          {/* ── Existing Screens ── */}
+          <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="Models" component={ModelsScreen} />
+          <Stack.Screen name="Parameters" component={ParametersScreen} />
+          <Stack.Screen name="Benchmark" component={BenchmarkScreen} />
+          <Stack.Screen name="About" component={AboutScreen} />
+          <Stack.Screen
+            name="SearchResult"
+            component={SearchResultScreen}
+            options={{ title: 'Search Models' }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </IncognitoProvider>
   );
 }
