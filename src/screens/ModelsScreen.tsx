@@ -207,7 +207,7 @@
 // });import React, { useState, useEffect, useRef } from 'react';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, TouchableWithoutFeedback, ToastAndroid, TextInput, Modal, Animated, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, TouchableWithoutFeedback, ToastAndroid, TextInput, Modal, Animated, Image , Platform ,Alert } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import RNFS from 'react-native-fs';
 import { useIsFocused } from '@react-navigation/native';
@@ -253,6 +253,15 @@ export default function ModelsScreen({ navigation }: any) {
   }, [loadingModel]);
 
   const barWidth = loadingAnim.interpolate({ inputRange: [0, 1], outputRange: ['10%', '100%'] });
+
+  // 🔥 UNIVERSAL TOAST FIX FOR iOS & ANDROID
+  const showMessage = (msg: string) => {
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(msg, ToastAndroid.SHORT);
+    } else {
+      Alert.alert("Iris", msg); // iOS me pop-up aayega kyunki native toast nahi hota
+    }
+  };
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -312,7 +321,7 @@ export default function ModelsScreen({ navigation }: any) {
   const cancelDownload = async (model: any) => {
     setDownloading(prev => ({ ...prev, [model.name]: false }));
     setProgresses(prev => ({ ...prev, [model.name]: 0 }));
-    ToastAndroid.show("Download cancelled", ToastAndroid.SHORT);
+    showMessage("Download cancelled" );
     
     try {
       const destPath = `${RNFS.DocumentDirectoryPath}/${model.destination}`;
@@ -329,7 +338,7 @@ export default function ModelsScreen({ navigation }: any) {
       setActiveModel(modelName);
       setLoadingModel(null);
       await AsyncStorage.setItem('ACTIVE_MODEL_NAME', modelName); 
-      ToastAndroid.show(`${modelName} Loaded!`, ToastAndroid.SHORT);
+      showMessage(`${modelName} Loaded!`);
     }, 2500);
   };
 
@@ -337,7 +346,7 @@ export default function ModelsScreen({ navigation }: any) {
   const handleSetDefault = async (modelName: string) => {
     setDefaultModel(modelName);
     await AsyncStorage.setItem('DEFAULT_MODEL_NAME', modelName);
-    ToastAndroid.show(`${modelName} set as Default!`, ToastAndroid.SHORT);
+    showMessage(`${modelName} set as Default!`);
   };
 
   const pickLocalModel = async () => {
@@ -345,10 +354,10 @@ export default function ModelsScreen({ navigation }: any) {
     try {
       const result = await pick({ mode: 'import' });
       const res = result[0];
-      if (!res || !res.name || !res.name.endsWith('.gguf')) return ToastAndroid.show("Invalid .gguf file", ToastAndroid.SHORT);
+      if (!res || !res.name || !res.name.endsWith('.gguf')) return showMessage("Invalid .gguf file");
       const destPath = `${RNFS.DocumentDirectoryPath}/${res.name}`;
-      if (await RNFS.exists(destPath)) return ToastAndroid.show("Model exists!", ToastAndroid.SHORT);
-      ToastAndroid.show("Importing...", ToastAndroid.LONG);
+      if (await RNFS.exists(destPath)) return showMessage("Model exists!");
+      showMessage("Importing...");
       await RNFS.copyFile(res.uri, destPath);
       checkFiles(); 
     } catch (err: any) { console.log(err); }

@@ -794,7 +794,19 @@ const PROMPTS = [
   "Draft a professional LinkedIn message to connect with a recruiter."
 ];
 
+const INFO_ITEMS = [
+  "Explains complex topics simply.",
+  "May sometimes be inaccurate.",
+  "Unable to provide current affairs due to no internet connectivity.",
+  "Long Press on messages to report."
+];
+
 export default function ChatScreen({ navigation }: any) {
+  const safeTtsStop = ()=>{
+    if (Platform.OS==='android'){
+      Tts.stop()
+    }
+  };
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [needsModel, setNeedsModel] = useState(false);
@@ -873,16 +885,19 @@ export default function ChatScreen({ navigation }: any) {
 
   useEffect(() => {
     Tts.setDefaultLanguage('en-US');
-    Tts.setDefaultRate(0.5); 
+    if (Platform.OS ==='android'){
+      Tts.setDefaultRate(0.5);
+    }
+     
     
-    Voice.onSpeechStart = () => { setIsListening(true); Tts.stop(); };
+    Voice.onSpeechStart = () => { setIsListening(true); safeTtsStop(); };
     Voice.onSpeechEnd = () => setIsListening(false);
     Voice.onSpeechError = () => setIsListening(false);
     Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
     Voice.onSpeechResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
 
     if (isFocused) loadEngine();
-    return () => { Voice.destroy().then(Voice.removeAllListeners); Tts.stop(); };
+    return () => { Voice.destroy().then(Voice.removeAllListeners); safeTtsStop(); };
   }, [isFocused]);
 
   const startListening = async () => {
@@ -896,7 +911,7 @@ export default function ChatScreen({ navigation }: any) {
       if (isGenerating && llamaContext) {
         try { llamaContext.stopCompletion(); } catch (e) { console.log(e); }
       }
-      Tts.stop();
+      safeTtsStop();
       setMessages([]);
       setInputText(''); 
       setIsGenerating(false);
@@ -949,7 +964,7 @@ export default function ChatScreen({ navigation }: any) {
   const sendMessage = async (text: string = inputText) => {
     if (!text.trim() || isGenerating) return;
     if (isListening) await Voice.stop();
-    Tts.stop();
+    safeTtsStop();
 
     const newUserMsg: Message = { id: Date.now().toString(), text, isUser: true };
     const botMsgId = (Date.now() + 1).toString();
@@ -1085,7 +1100,22 @@ export default function ChatScreen({ navigation }: any) {
 
         {messages.length === 0 ? (
           <View style={styles.emptyChatContainer}>
-            <Text style={styles.helloText}>Hello, Ask me Anything</Text>
+            {/* 1. TEXT RESIZED & SPLIT */}
+            <Text style={styles.helloText}>Hello, Ask me{'\n'}Anything</Text>
+
+            {/* 2. THE 4 INFO PILLS */}
+            <View style={styles.infoItemsContainer}>
+              {INFO_ITEMS.map((item, index) => (
+                <View key={index} style={styles.infoPill}>
+                  <View style={styles.infoIconWrapper}>
+                    <Text style={styles.infoIconText}>i</Text>
+                  </View>
+                  <Text style={styles.infoText}>{item}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* 3. PROMPTS SLIDER (Logic untouched) */}
             <View style={{ height: 120 }}> 
               <FlatList 
                 data={PROMPTS} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(item) => item}
@@ -1173,8 +1203,15 @@ const styles = StyleSheet.create({
   micIconImage: { width: 24, height: 24, tintColor: '#ffffff', marginRight: 12 },
   sendIconImage: { width: 24, height: 24, tintColor: '#ffffff', marginLeft: 12 },
 
-  emptyChatContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  helloText: { color: '#ffffff', fontSize: 32, fontWeight: '300', textAlign: 'center', marginBottom: 40 },
+  emptyChatContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
+  helloText: { color: '#f8fafc', fontSize: 34, fontWeight: '400', textAlign: 'center', marginBottom: 24 }, // Size reduced
+  
+  // 🔥 NAYE STYLES 4 PILLS KE LIYE
+  infoItemsContainer: { width: '100%', marginBottom: 30, gap: 12 },
+  infoPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.05)', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.03)' },
+  infoIconWrapper: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#e2e8f0', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  infoIconText: { color: '#0f172a', fontSize: 13, fontWeight: 'bold', fontStyle: 'italic' },
+  infoText: { color: '#e2e8f0', fontSize: 13, flex: 1, fontWeight: '400' },
   promptsContainer: { paddingHorizontal: 16, gap: 12 },
   promptCard: { backgroundColor: 'rgba(255, 255, 255, 0.05)', width: 200, height: 100, justifyContent: 'center', alignItems: 'center', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   promptText: { color: '#A0A0A5', fontSize: 13, textAlign: 'center' },
