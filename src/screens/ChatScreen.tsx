@@ -768,7 +768,7 @@
 
 
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Image, ToastAndroid } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Image, ToastAndroid , Dimensions , Alert } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import RNFS from 'react-native-fs';
 import { initLlama } from 'llama.rn';
@@ -826,7 +826,9 @@ export default function ChatScreen({ navigation }: any) {
   const isFocused = useIsFocused();
   const flatListRef = useRef<FlatList>(null);
 
-  // 🔥 1. FIXED: RAM FLUSHER FOR MODEL SWITCHING
+  // 🔥 1. FIXED: RAM FLUSHER, PATH SANITIZER & IOS MEMORY OPTIMIZED
+  // 🔥 THE DETECTIVE ENGINE: Checks File Size & Uses Apple GPU
+  // 🔥 THE BULLETPROOF ENGINE (Diagnose + Auto-Fallback)
   const loadEngine = async () => {
     let activeModelPath = null;
     let modelNameForDrawer = "No active model";
@@ -849,11 +851,11 @@ export default function ChatScreen({ navigation }: any) {
         const files = await RNFS.readDir(RNFS.DocumentDirectoryPath);
         const ggufFile = files.find(f => f.name.endsWith('.gguf'));
         if (ggufFile) {
-          activeModelPath = `${RNFS.DocumentDirectoryPath}/${ggufFile.name}`;
+          activeModelPath = ggufFile.path; // 🔥 Using absolute OS path safely
           modelNameForDrawer = ggufFile.name;
           await AsyncStorage.setItem('ACTIVE_MODEL_NAME', ggufFile.name);
         }
-      } catch (e) { console.log("Failed to scan directory", e); }
+      } catch (e) { console.log(e); }
     }
     
     setCurrentActiveModel(modelNameForDrawer);
@@ -867,18 +869,63 @@ export default function ChatScreen({ navigation }: any) {
     
     if (activeModelPath !== currentLoadedPath) {
       if (llamaContext) {
-        try { await llamaContext.release(); } catch(e) { console.log("Error releasing old model", e); }
+        try { await llamaContext.release(); } catch(e) {}
         setLlamaContext(null); 
       }
 
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       try {
-        const ctx = await initLlama({ model: activeModelPath, use_mlock: true, n_ctx: 2048 });
+        // 🕵️‍♂️ 1. DETECTIVE MODE: Check Real File Size
+        const stat = await RNFS.stat(activeModelPath);
+        const sizeInMB = stat.size / (1024 * 1024);
+        
+        if (sizeInMB < 50) {
+          Alert.alert(
+            "Corrupt Download ❌", 
+            `File size is only ${sizeInMB.toFixed(2)} MB. The model didn't download completely. Delete it and try downloading again.`
+          );
+          return;
+        }
+
+        // 🚀 2. ATTEMPT 1: FAST GPU LOAD
+        const cleanPath = activeModelPath.replace(/^file:\/\//, '');
+        
+        const ctx = await initLlama({ 
+          model: cleanPath, 
+          use_mlock: false, // iOS strictly hates memory locks
+          n_ctx: 1024,      // Safe context window
+          n_gpu_layers: Platform.OS === 'ios' ? 50 : 0 // Enable Apple Metal GPU
+        });
+        
         setLlamaContext(ctx);
         setCurrentLoadedPath(activeModelPath);
+        console.log("Loaded successfully on GPU!");
+
       } catch (err) { 
-        console.error("Engine failed:", err); 
+        console.error("GPU Load failed, trying Fallback CPU mode...", err); 
+        
+        // 🛡️ 3. ATTEMPT 2: SAFE CPU FALLBACK (Agar GPU/Metal reject kar de)
+        try {
+          const filePrefixedPath = `file://${activeModelPath.replace(/^file:\/\//, '')}`;
+          
+          const ctxFallback = await initLlama({ 
+            model: filePrefixedPath, 
+            use_mlock: false, 
+            n_ctx: 1024,
+            n_gpu_layers: 0 // Completely OFF for absolute safety
+          });
+          
+          setLlamaContext(ctxFallback);
+          setCurrentLoadedPath(activeModelPath);
+          console.log("Loaded successfully on Fallback CPU!");
+
+        } catch (fallbackErr) {
+          Alert.alert(
+            "Engine Crash ⚠️", 
+            "The model file exists, but the AI engine refused to load it. It might be unsupported or requires more RAM than available."
+          );
+        }
       }
     }
   };
