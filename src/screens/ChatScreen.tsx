@@ -354,7 +354,7 @@
 //   downloadBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 }
 // });
 
-
+// mic was working 
 
 // import React, { useState, useEffect, useRef } from 'react';
 // import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Image, ToastAndroid } from 'react-native';
@@ -1146,24 +1146,27 @@ export default function ChatScreen({ navigation }: any) {
         </View>
 
         {messages.length === 0 ? (
+          // 🔥 UI RESTRUCTURED HERE FOR BOSS PRESENTATION
           <View style={styles.emptyChatContainer}>
-            {/* 1. TEXT RESIZED & SPLIT */}
-            <Text style={styles.helloText}>Hello, Ask me{'\n'}Anything</Text>
-
-            {/* 2. THE 4 INFO PILLS */}
-            <View style={styles.infoItemsContainer}>
-              {INFO_ITEMS.map((item, index) => (
-                <View key={index} style={styles.infoPill}>
-                  <View style={styles.infoIconWrapper}>
-                    <Text style={styles.infoIconText}>i</Text>
+            
+            {/* Top Section: Hello + Pills */}
+            <View style={styles.topSection}>
+              <Text style={styles.helloText}>Hello, Ask me{'\n'}Anything</Text>
+              
+              <View style={styles.infoItemsContainer}>
+                {INFO_ITEMS.map((item, index) => (
+                  <View key={index} style={styles.infoPill}>
+                    <View style={styles.infoIconWrapper}>
+                      <Text style={styles.infoIconText}>i</Text>
+                    </View>
+                    <Text style={styles.infoText}>{item}</Text>
                   </View>
-                  <Text style={styles.infoText}>{item}</Text>
-                </View>
-              ))}
+                ))}
+              </View>
             </View>
 
-            {/* 3. PROMPTS SLIDER (Logic untouched) */}
-            <View style={{ height: 120 }}> 
+            {/* Bottom Section: Prompts just above the input */}
+            <View style={styles.bottomPromptsWrapper}> 
               <FlatList 
                 data={PROMPTS} horizontal showsHorizontalScrollIndicator={false} keyExtractor={(item) => item}
                 contentContainerStyle={styles.promptsContainer}
@@ -1175,6 +1178,7 @@ export default function ChatScreen({ navigation }: any) {
                 )}
               />
             </View>
+            
           </View>
         ) : (
           <FlatList
@@ -1182,7 +1186,6 @@ export default function ChatScreen({ navigation }: any) {
             contentContainerStyle={styles.chatContainer}
             keyboardShouldPersistTaps="handled"
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-            // 🔥 3. FIXED: MARKDOWN FOR BOT MESSAGES
             renderItem={({ item }) => (
               <View style={[styles.messageBubble, item.isUser ? styles.userBubble : styles.botBubble]}>
                 {item.isUser ? (
@@ -1227,7 +1230,6 @@ export default function ChatScreen({ navigation }: any) {
   );
 }
 
-// 🔥 ADDED MARKDOWN STYLES FOR DARK THEME
 const markdownStyles = StyleSheet.create({
   body: { color: '#E2E8F0', fontSize: 16, lineHeight: 24 },
   strong: { fontWeight: 'bold', color: '#ffffff' },
@@ -1250,11 +1252,13 @@ const styles = StyleSheet.create({
   micIconImage: { width: 24, height: 24, tintColor: '#ffffff', marginRight: 12 },
   sendIconImage: { width: 24, height: 24, tintColor: '#ffffff', marginLeft: 12 },
 
-  emptyChatContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
-  helloText: { color: '#f8fafc', fontSize: 34, fontWeight: '400', textAlign: 'center', marginBottom: 24 }, // Size reduced
+  // 🔥 UI STYLES UPDATED FOR SPACING & SIZING
+  emptyChatContainer: { flex: 1, paddingHorizontal: 16, paddingVertical: 10, justifyContent: 'space-between' },
+  topSection: { alignItems: 'center', marginTop: Dimensions.get('window').height * 0.05 },
+  helloText: { color: '#f8fafc', fontSize: 46, fontWeight: '400', textAlign: 'center', marginBottom: 35 }, 
+  infoItemsContainer: { width: '100%', gap: 20 }, // Increased gap between pills
+  bottomPromptsWrapper: { height: 110, marginBottom: 5 }, // Just above the text input
   
-  // 🔥 NAYE STYLES 4 PILLS KE LIYE
-  infoItemsContainer: { width: '100%', marginBottom: 30, gap: 12 },
   infoPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.05)', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.03)' },
   infoIconWrapper: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#e2e8f0', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   infoIconText: { color: '#0f172a', fontSize: 13, fontWeight: 'bold', fontStyle: 'italic' },
@@ -1262,6 +1266,7 @@ const styles = StyleSheet.create({
   promptsContainer: { paddingHorizontal: 16, gap: 12 },
   promptCard: { backgroundColor: 'rgba(255, 255, 255, 0.05)', width: 200, height: 100, justifyContent: 'center', alignItems: 'center', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   promptText: { color: '#A0A0A5', fontSize: 13, textAlign: 'center' },
+  
   chatContainer: { padding: 16, flexGrow: 1, justifyContent: 'flex-end' },
   messageBubble: { maxWidth: '85%', padding: 14, borderRadius: 18, marginBottom: 12 },
   userBubble: { alignSelf: 'flex-end', backgroundColor: '#171E2C', borderBottomRightRadius: 4 },

@@ -534,7 +534,8 @@ import {
   ActivityIndicator, 
   Keyboard, 
   ToastAndroid, 
-  Platform
+  Platform,
+  Image // 🔥 IMPORTED IMAGE COMPONENT
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -550,7 +551,6 @@ const formatNumber = (num: number) => {
   return num.toString();
 };
 
-// 🔥 NaN BUG FIXED & EXACT FORMATTING ("Updated 1 year ago")
 const timeAgo = (dateString: any) => {
   if (!dateString) return 'Unknown';
   const timestamp = new Date(dateString).getTime();
@@ -565,7 +565,6 @@ const timeAgo = (dateString: any) => {
   return 'Updated Today';
 };
 
-// Converts bytes to exact GB/MB like "1.39 GB"
 const formatBytes = (bytes: number) => {
     if (!+bytes) return '0 Bytes';
     const k = 1024;
@@ -603,7 +602,6 @@ export default function SearchResultScreen() {
     return () => clearTimeout(timeout);
   }, [query]);
 
-  // 🔥 API FIX 1: ONLY FETCH GGUF MODELS (&filter=gguf)
   const fetchTrending = async (searchQuery = '', isLoadMore = false) => {
     if (!isLoadMore) {
       setIsLoading(true);
@@ -637,30 +635,26 @@ export default function SearchResultScreen() {
     if (!isLoadingMore && nextPageUrl && viewState === 'feed') fetchTrending(query, true);
   };
 
-  // 🔥 API FIX 2: USING TREE API TO GET REAL SIZES (MB/GB)
   const fetchRepoFiles = async (repoItem: any) => {
     Keyboard.dismiss();
     setIsLoading(true);
     setCurrentRepo(repoItem.id);
     setSelectedModel(repoItem);
     try {
-      // Tree endpoint gives exact files and their sizes
       const treeResponse = await fetch(`https://huggingface.co/api/models/${repoItem.id}/tree/main?recursive=true`);
       const treeData = await treeResponse.json();
       
       if (Array.isArray(treeData)) {
-        // Filter strictly for gguf files
         const ggufFiles = treeData
             .filter((f: any) => f.type === 'file' && f.path.toLowerCase().endsWith('.gguf'))
             .map((f: any) => ({
                 rfilename: f.path,
-                size: f.size // Size is fetched directly from HF!
+                size: f.size 
             }));
             
         setRepoFiles(ggufFiles);
         setViewState('files');
         
-        // Check local storage for downloaded files
         const localFiles = await RNFS.readDir(RNFS.DocumentDirectoryPath);
         const downloadedNames = localFiles.map(f => f.name);
         setDownloadedFiles(ggufFiles.filter((f: any) => downloadedNames.includes(f.rfilename)).map((f: any) => f.rfilename));
@@ -706,7 +700,6 @@ export default function SearchResultScreen() {
     <LinearGradient colors={['#111111', '#000000']} style={styles.container} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
           
-          {/* DRAG HANDLE PILL (Matches Your Images) */}
           <View style={styles.dragHandleContainer}>
             <View style={styles.dragHandleLine} />
             <View style={styles.dragHandleLine} />
@@ -735,7 +728,13 @@ export default function SearchResultScreen() {
                           <Text style={styles.feedName}>{name}</Text>
                           <View style={styles.feedMetaRow}>
                               <Text style={styles.feedMetaText}>🕒 {dateDisplay.replace('Updated ', '')}</Text>
-                              <Text style={styles.feedMetaText}>⬇ {formatNumber(item.downloads)}</Text>
+                              
+                              {/* 🔥 FIX 1: REPLACED EMOJI WITH PNG IN FEED META ROW */}
+                              <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
+                                <Image source={require('../assets/icons/download.png')} style={{width: 12, height: 12, tintColor: '#a0a0a0', resizeMode: 'contain'}} />
+                                <Text style={styles.feedMetaText}>{formatNumber(item.downloads)}</Text>
+                              </View>
+                              
                               <Text style={styles.feedMetaText}>♡ {item.likes}</Text>
                           </View>
                       </TouchableOpacity>
@@ -767,7 +766,6 @@ export default function SearchResultScreen() {
               ListHeaderComponent={
                 selectedModel ? (
                   <View style={styles.detailsHeader}>
-                    {/* Back Button */}
                     <TouchableOpacity onPress={() => setViewState('feed')} style={{marginBottom: 10, alignSelf: 'flex-start'}}>
                         <Text style={{color: '#a0a0a0', fontSize: 16}}>← Back</Text>
                     </TouchableOpacity>
@@ -779,9 +777,13 @@ export default function SearchResultScreen() {
                       <View style={styles.metaBadge}>
                         <Text style={styles.metaBadgeText}>🕒 {timeAgo(selectedModel.lastModified || selectedModel.createdAt)}</Text>
                       </View>
-                      <View style={styles.metaBadge}>
-                        <Text style={styles.metaBadgeText}>⬇ {formatNumber(selectedModel.downloads)}</Text>
+                      
+                      {/* 🔥 FIX 2: REPLACED EMOJI WITH PNG IN DETAIL HEADER */}
+                      <View style={[styles.metaBadge, {flexDirection: 'row', alignItems: 'center', gap: 6}]}>
+                        <Image source={require('../assets/icons/download.png')} style={{width: 14, height: 14, tintColor: '#d0c4d6', resizeMode: 'contain'}} />
+                        <Text style={styles.metaBadgeText}>{formatNumber(selectedModel.downloads)}</Text>
                       </View>
+                      
                       <View style={styles.metaBadge}>
                         <Text style={styles.metaBadgeText}>♡ {selectedModel.likes}</Text>
                       </View>
@@ -797,11 +799,9 @@ export default function SearchResultScreen() {
                 const isDownloading = downloading[item.rfilename];
                 const progress = progresses[item.rfilename] || 0;
                 const isDownloaded = downloadedFiles.includes(item.rfilename);
-                // We use exact size from Tree API now!
                 const sizeDisplay = item.size ? formatBytes(item.size) : 'Unknown Size';
 
                 return (
-                  // 🔥 EXACT PURPLISH/YELLOW CARD LOOK
                   <View style={[styles.fileCard, isDownloaded && styles.fileCardDownloaded]}>
                       
                       <View style={{ flex: 1, paddingRight: 10 }}>
@@ -811,18 +811,28 @@ export default function SearchResultScreen() {
                           </Text>
                       </View>
 
+                      {/* 🔥 FIX 3: REPLACED ALL CARD ICONS WITH PNGs */}
                       <View style={styles.iconRow}>
                           <TouchableOpacity style={styles.iconBtn}>
-                              <Text style={[styles.iconText, isDownloaded && {color: '#ffffff'}]}>🔖</Text>
+                              <Image 
+                                source={require('../assets/icons/save.png')} 
+                                style={[styles.iconImage, isDownloaded && { tintColor: '#ffffff' }]} 
+                              />
                           </TouchableOpacity>
 
                           {isDownloaded ? (
                               <TouchableOpacity style={styles.iconBtn} onPress={() => handleDelete(item.rfilename)}>
-                                  <Text style={[styles.iconText, {color: '#ffffff'}]}>🗑️</Text>
+                                  <Image 
+                                    source={require('../assets/icons/delete.png')} 
+                                    style={[styles.iconImage, { tintColor: '#ffffff' }]} 
+                                  />
                               </TouchableOpacity>
                           ) : (
                               <TouchableOpacity style={styles.iconBtn} onPress={() => startCustomDownload(item.rfilename)} disabled={isDownloading}>
-                                  <Text style={styles.iconText}>⬇️</Text>
+                                  <Image 
+                                    source={require('../assets/icons/download.png')} 
+                                    style={styles.iconImage} 
+                                  />
                               </TouchableOpacity>
                           )}
                       </View>
@@ -847,7 +857,6 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   
-  // Double-line drag handle matching photo
   dragHandleContainer: { width: '100%', alignItems: 'center', paddingTop: 10, paddingBottom: 15, gap: 4 },
   dragHandleLine: { width: 30, height: 3, backgroundColor: '#ffffff', opacity: 0.6, borderRadius: 2 },
 
@@ -883,25 +892,32 @@ const styles = StyleSheet.create({
   metaBadgeText: { color: '#d0c4d6', fontSize: 13, fontWeight: '500' },
   filesSubtitle: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' },
 
-  // SLEEK CARDS MATCHING YOUR IMAGES
   fileCard: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      backgroundColor: '#574b60', // Purplish Grey
+      backgroundColor: '#574b60',
       borderRadius: 12,
       padding: 16,
       marginBottom: 12,
       overflow: 'hidden',
   },
   fileCardDownloaded: {
-      backgroundColor: '#eab308', // Solid Yellow
+      backgroundColor: '#eab308', 
   },
   fileName: { color: '#ffffff', fontSize: 15, fontWeight: '600', marginBottom: 4 },
   fileSize: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
   iconRow: { flexDirection: 'row', gap: 16, zIndex: 2 },
   iconBtn: { padding: 4 },
   iconText: { color: 'rgba(255,255,255,0.8)', fontSize: 16 },
+  
+  // 🔥 STYLES FOR PNG ICONS
+  iconImage: { 
+      width: 22, 
+      height: 22, 
+      tintColor: 'rgba(255,255,255,0.8)',
+      resizeMode: 'contain' 
+  },
   
   progressOverlay: {
       position: 'absolute', left: 0, top: 0, bottom: 0,

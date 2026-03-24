@@ -5,7 +5,7 @@ PODS:
   - hermes-engine (250829098.0.9):
     - hermes-engine/Pre-built (= 250829098.0.9)
   - hermes-engine/Pre-built (250829098.0.9)
-  - llama-rn (0.11.4):
+  - llama-rn (0.11.5):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2358,7 +2358,7 @@ SPEC CHECKSUMS:
   BVLinearGradient: cb006ba232a1f3e4f341bb62c42d1098c284da70
   FBLazyVector: e97c19a5a442429d1988f182a1940fb08df514da
   hermes-engine: e17c56eb120cf98fb3e0cc638cb5836135eb5ed3
-  llama-rn: 07b1c0399c00fd72a04410f25fecabe1fe6604c1
+  llama-rn: 5d36ac196a55536ac119fa0b70438e6aeaf84f8c
   RCTDeprecation: af44b104091a34482596cd9bd7e8d90c4e9b4bd7
   RCTRequired: bb77b070f75f53398ce43c0aaaa58337cebe2bf6
   RCTSwiftUI: afc0a0a635860da1040a0b894bfd529da06d7810
