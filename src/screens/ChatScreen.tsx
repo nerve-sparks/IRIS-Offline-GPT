@@ -28,6 +28,8 @@ import {
   forkConversation,
 } from '../services/conversationStore';
 import { showConversationExportMenu } from '../services/conversationExport';
+import { useIncognito } from '../services/incognitoContext';
+import { addTempMessage, endTempSession } from '../services/tempChatStore';
 // ── Inline PDF/HTML builder — generates a shareable HTML file, no extra deps
 const buildConversationFile = async (conv: Conversation): Promise<string> => {
   const rows = conv.messages.map(m => {

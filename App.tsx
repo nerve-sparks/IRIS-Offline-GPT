@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { loadStore } from './src/services/conversationStore';
+import { IncognitoProvider } from './src/services/incognitoContext';
 
 // Existing screens
 import ChatScreen from './src/screens/ChatScreen';
@@ -36,8 +37,9 @@ export default function App() {
   if (!ready) return null;
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={headerStyle}>
+    <IncognitoProvider>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={headerStyle}>
 
         {/* ── Chat is HOME screen (like ChatGPT) ── */}
         <Stack.Screen
@@ -77,7 +79,8 @@ export default function App() {
           component={SearchResultScreen}
           options={{ title: 'Search Models' }}
         />
-      </Stack.Navigator>
-    </NavigationContainer>
+        </Stack.Navigator>
+      </NavigationContainer>
+    </IncognitoProvider>
   );
 }
