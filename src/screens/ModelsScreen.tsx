@@ -206,8 +206,8 @@
 //   mainFabIconOpen: { fontSize: 36, marginTop: -6 }
 // });import React, { useState, useEffect, useRef } from 'react';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, TouchableWithoutFeedback, ToastAndroid, TextInput, Modal, Animated, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, TouchableWithoutFeedback, ToastAndroid, TextInput, Modal, Image } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import RNFS from 'react-native-fs';
 import { useIsFocused } from '@react-navigation/native';
@@ -228,7 +228,6 @@ export default function ModelsScreen({ navigation }: any) {
   const [searchQuery, setSearchQuery] = useState('');
   
   const [loadingModel, setLoadingModel] = useState<string | null>(null);
-  const loadingAnim = useRef(new Animated.Value(0)).current;
 
   const [isFabExpanded, setIsFabExpanded] = useState(false);
   const isFocused = useIsFocused();
@@ -237,22 +236,6 @@ export default function ModelsScreen({ navigation }: any) {
 
   const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
   const handleTouchEnd = (e: any) => { if (e.nativeEvent.pageX - touchStartX > 50) setIsDrawerOpen(true); };
-
-  useEffect(() => {
-    if (loadingModel) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(loadingAnim, { toValue: 1, duration: 1200, useNativeDriver: false }),
-          Animated.timing(loadingAnim, { toValue: 0, duration: 1200, useNativeDriver: false })
-        ])
-      ).start();
-    } else {
-      loadingAnim.stopAnimation();
-      loadingAnim.setValue(0);
-    }
-  }, [loadingModel]);
-
-  const barWidth = loadingAnim.interpolate({ inputRange: [0, 1], outputRange: ['10%', '100%'] });
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -449,7 +432,7 @@ export default function ModelsScreen({ navigation }: any) {
           <Text style={styles.loadingSubtitle}>Please wait...</Text>
           <Text style={styles.loadingModelName}>{loadingModel}</Text>
           <View style={styles.loadingTrack}>
-            <Animated.View style={[styles.loadingFill, { width: barWidth }]} />
+            <View style={styles.loadingFill} />
           </View>
         </View>
       </Modal>
@@ -473,7 +456,7 @@ const styles = StyleSheet.create({
   loadingSubtitle: { color: '#e2e8f0', fontSize: 16, marginBottom: 24 },
   loadingModelName: { color: '#ffffff', fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 12 },
   loadingTrack: { width: '80%', height: 4, backgroundColor: '#334155', borderRadius: 2, overflow: 'hidden' },
-  loadingFill: { height: '100%', backgroundColor: '#3b82f6', borderRadius: 2 },
+  loadingFill: { height: '100%', width: '100%', backgroundColor: '#3b82f6', borderRadius: 2 },
   fabContainer: { position: 'absolute', bottom: 24, right: 24, alignItems: 'flex-end' },
   fabMenu: { marginBottom: 16, alignItems: 'flex-end' },
   fabRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },

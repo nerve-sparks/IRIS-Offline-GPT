@@ -2,7 +2,7 @@
 import React, { useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet,
-  Animated, Dimensions, TouchableWithoutFeedback, TextInput,
+  Dimensions, TouchableWithoutFeedback, TextInput,
   StatusBar, Alert, Modal, ScrollView,
 } from 'react-native';
 import {
@@ -39,8 +39,6 @@ const formatDate = (iso: string) => {
 export default function ConversationSidebar({ visible, onClose, onSelectConversation, onNewChat }: Props) {
   const conversations = useConversations();
   const folders = useFolders();
-  const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
-  const overlayAnim = useRef(new Animated.Value(0)).current;
 
   const [query, setQuery] = React.useState('');
   const [activeFolder, setActiveFolder] = React.useState<string | null>(null);
@@ -52,20 +50,7 @@ export default function ConversationSidebar({ visible, onClose, onSelectConversa
   const [selectedColor, setSelectedColor] = React.useState(FOLDER_COLORS[0]);
 
   useEffect(() => {
-    if (visible) {
-      setIsMounted(true);
-      Animated.parallel([
-        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }),
-        Animated.timing(overlayAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.spring(slideAnim, { toValue: -DRAWER_WIDTH, useNativeDriver: true, tension: 65, friction: 11 }),
-        Animated.timing(overlayAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]).start(({ finished }) => {
-        if (finished) setIsMounted(false);
-      });
-    }
+    setIsMounted(visible);
   }, [visible]);
 
   // Filter conversations by search + active folder
@@ -151,11 +136,11 @@ export default function ConversationSidebar({ visible, onClose, onSelectConversa
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* Dim overlay */}
       <TouchableWithoutFeedback onPress={onClose}>
-        <Animated.View style={[styles.overlay, { opacity: overlayAnim }]} />
+        <View style={styles.overlay} />
       </TouchableWithoutFeedback>
 
       {/* Sidebar drawer */}
-      <Animated.View style={[styles.drawer, { transform: [{ translateX: slideAnim }] }]}>
+      <View style={styles.drawer}>
 
         {/* ── Search bar ── */}
         <View style={styles.searchBar}>
@@ -290,7 +275,7 @@ export default function ConversationSidebar({ visible, onClose, onSelectConversa
           </View>
           <Text style={styles.bottomText}>IRIS AI</Text>
         </View>
-      </Animated.View>
+      </View>
 
       {/* ── New Folder Modal ── */}
       <Modal visible={showFolderModal} transparent animationType="fade">

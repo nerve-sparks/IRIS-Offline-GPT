@@ -10,6 +10,11 @@ export interface Message {
   timestamp: string;
   isStarred: boolean;
   isPinned: boolean;
+  // ── Branching fields (all optional — backward-compatible) ──
+  parentId?: string;           // the user msg id this assistant reply belongs to
+  variants?: Message[];        // alternate versions of the same message
+  activeVariantIndex?: number; // which variant index is currently shown (0-based)
+  editedFrom?: string;         // original text before an edit
 }
 
 export interface Conversation {
@@ -133,6 +138,12 @@ const normalizeMessage = (message: Message): Message => ({
   ...message,
   isStarred: !!message.isStarred,
   isPinned: !!message.isPinned,
+  variants: message.variants ? message.variants.map(v => ({
+    ...v,
+    isStarred: !!v.isStarred,
+    isPinned: !!v.isPinned,
+  })) : undefined,
+  activeVariantIndex: message.activeVariantIndex ?? (message.variants && message.variants.length > 0 ? message.variants.length - 1 : undefined),
 });
 
 const normalizeConversation = (conversation: Conversation): Conversation => ({
@@ -198,7 +209,8 @@ export const createConversation = (folderId: string | null = null): Conversation
 export const addMessage = (
   conversationId: string,
   text: string,
-  sender: 'user' | 'assistant' = 'user'
+  sender: 'user' | 'assistant' = 'user',
+  parentId?: string
 ): Message => {
   const msg: Message = {
     id: `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
@@ -207,6 +219,7 @@ export const addMessage = (
     timestamp: new Date().toISOString(),
     isStarred: false,
     isPinned: false,
+    parentId,
   };
   _conversations = _conversations.map(c => {
     if (c.id !== conversationId) return c;
@@ -370,4 +383,153 @@ export const simulateAIReply = async (conversationId: string): Promise<Message> 
   await new Promise(r => setTimeout(r, 900 + Math.random() * 600));
   const reply = aiReplies[Math.floor(Math.random() * aiReplies.length)];
   return addMessage(conversationId, reply, 'assistant');
+};
+
+// ── Branching Actions ─────────────────────────────────────────────────────────
+
+/**
+ * Adds an alternative assistant response as a new variant on the assistant
+ * message that follows `userMsgId`. The new variant becomes the active one.
+ */
+export const addMessageVariant = (
+  conversationId: string,
+  userMsgId: string,
+  text: string
+): Message | null => {
+  let result: Message | null = null;
+  _conversations = _conversations.map(c => {
+    if (c.id !== conversationId) return c;
+    const messages = c.messages.map(m => {
+      if (m.parentId !== userMsgId || m.sender !== 'assistant') return m;
+      const newVariant: Message = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        text,
+        sender: 'assistant',
+        timestamp: new Date().toISOString(),
+        isStarred: false,
+        isPinned: false,
+        parentId: userMsgId,
+      };
+      result = newVariant;
+      const variants = [...(m.variants ?? [m]), newVariant];
+      return { ...m, variants, activeVariantIndex: variants.length - 1 };
+    });
+    return { ...c, messages };
+  });
+  notify();
+  persist();
+  return result;
+};
+
+/**
+ * Navigates to a specific variant index on an assistant message.
+ */
+export const setActiveVariant = (
+  conversationId: string,
+  messageId: string,
+  index: number
+): void => {
+  _conversations = _conversations.map(c => {
+    if (c.id !== conversationId) return c;
+    const messages = c.messages.map(m => {
+      if (m.id !== messageId) return m;
+      const total = m.variants ? m.variants.length : 1;
+      const clamped = Math.max(0, Math.min(index, total - 1));
+      const nextText = m.variants?.[clamped]?.text ?? m.text;
+      return { ...m, text: nextText, activeVariantIndex: clamped };
+    });
+    return { ...c, messages };
+  });
+  notify();
+  persist();
+};
+
+/**
+ * Edits a user message: saves the original text in `editedFrom`, updates
+ * the message text, and removes all messages that came after it so a fresh
+ * AI response can be generated. Returns the truncated conversation.
+ */
+export const editUserMessage = (
+  conversationId: string,
+  messageId: string,
+  newText: string
+): Conversation | null => {
+  let result: Conversation | null = null;
+  _conversations = _conversations.map(c => {
+    if (c.id !== conversationId) return c;
+    const idx = c.messages.findIndex(m => m.id === messageId);
+    if (idx === -1) return c;
+    const current = c.messages[idx];
+    const existingVariants = current.variants ?? [
+      {
+        ...current,
+        variants: undefined,
+        activeVariantIndex: undefined,
+      },
+    ];
+    const nextVariant: Message = {
+      ...current,
+      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      text: newText,
+      timestamp: new Date().toISOString(),
+      editedFrom: undefined,
+      variants: undefined,
+      activeVariantIndex: undefined,
+    };
+    const updated: Message = {
+      ...current,
+      text: newText,
+      variants: [...existingVariants, nextVariant],
+      activeVariantIndex: existingVariants.length,
+      editedFrom: current.editedFrom ?? current.text,
+      timestamp: new Date().toISOString(),
+    };
+    const nextMessage = c.messages[idx + 1];
+    const linkedAssistant =
+      nextMessage && nextMessage.sender === 'assistant' && nextMessage.parentId === messageId
+        ? nextMessage
+        : null;
+
+    // Keep the edited user message and its linked assistant so edits become variants
+    // on the same branch instead of replacing the whole message pair.
+    const messages = linkedAssistant
+      ? [...c.messages.slice(0, idx), updated, linkedAssistant]
+      : [...c.messages.slice(0, idx), updated];
+    result = { ...c, messages };
+    return result;
+  });
+  notify();
+  persist();
+  return result;
+};
+
+/**
+ * Forks a conversation: creates a new conversation pre-seeded with all
+ * messages up to and including the message at `upToMsgId`.
+ * Returns the new conversation.
+ */
+export const forkConversation = (
+  conversationId: string,
+  upToMsgId: string
+): Conversation | null => {
+  const source = _conversations.find(c => c.id === conversationId);
+  if (!source) return null;
+  const idx = source.messages.findIndex(m => m.id === upToMsgId);
+  if (idx === -1) return null;
+  const forkedMessages = source.messages.slice(0, idx + 1).map(m => ({
+    ...m,
+    id: `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+  }));
+  const forked: Conversation = {
+    id: `conv_${Date.now()}`,
+    title: `Fork of ${source.title}`,
+    folderId: source.folderId,
+    isPinned: false,
+    createdAt: new Date().toISOString(),
+    messages: forkedMessages,
+  };
+  _conversations = [forked, ..._conversations];
+  notify();
+  persist();
+  return forked;
 };

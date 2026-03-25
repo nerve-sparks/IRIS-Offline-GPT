@@ -5,8 +5,8 @@
 import React, { useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet,
-  Animated, Dimensions, TouchableWithoutFeedback, TextInput,
-  StatusBar, Alert, Modal, ScrollView, Linking, Image, Share,
+  Dimensions, TouchableWithoutFeedback, TextInput,
+  StatusBar, Alert, Modal, ScrollView, Linking, Image, Share, Switch,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {
@@ -47,8 +47,6 @@ export default function IrisSidebar({
 }: Props) {
   const conversations = useConversations();
   const folders = useFolders();
-  const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
-  const overlayAnim = useRef(new Animated.Value(0)).current;
 
   const [query, setQuery] = React.useState('');
   const [activeFolder, setActiveFolder] = React.useState<string | null>(null);
@@ -60,20 +58,7 @@ export default function IrisSidebar({
   const [selectedColor, setSelectedColor] = React.useState(FOLDER_COLORS[0]);
 
   useEffect(() => {
-    if (visible) {
-      setIsMounted(true);
-      Animated.parallel([
-        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }),
-        Animated.timing(overlayAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.spring(slideAnim, { toValue: -DRAWER_WIDTH, useNativeDriver: true, tension: 65, friction: 11 }),
-        Animated.timing(overlayAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]).start(({ finished }) => {
-        if (finished) setIsMounted(false);
-      });
-    }
+    setIsMounted(visible);
   }, [visible]);
 
   // Filter conversations
@@ -153,11 +138,11 @@ export default function IrisSidebar({
 
       {/* Dim overlay */}
       <TouchableWithoutFeedback onPress={onClose}>
-        <Animated.View style={[styles.overlay, { opacity: overlayAnim }]} />
+        <View style={styles.overlay} />
       </TouchableWithoutFeedback>
 
       {/* Sidebar drawer */}
-      <Animated.View style={[styles.drawer, { transform: [{ translateX: slideAnim }] }]}>
+      <View style={styles.drawer}>
 
         {/* ── HEADER — Brand (company's NerveSparks brand) ── */}
         <LinearGradient
@@ -314,7 +299,7 @@ export default function IrisSidebar({
           </TouchableOpacity>
           <Text style={styles.poweredBy}>powered by llama.cpp</Text>
         </View>
-      </Animated.View>
+      </View>
 
       {/* ── New Folder Modal ── */}
       <Modal visible={showFolderModal} transparent animationType="fade">

@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet,
-  KeyboardAvoidingView, Platform, Keyboard, Image, ToastAndroid,
+  KeyboardAvoidingView, Platform, Keyboard, Image, ToastAndroid, NativeModules,
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import RNFS from 'react-native-fs';
 import { initLlama } from 'llama.rn';
 import Voice, { SpeechResultsEvent } from '@react-native-voice/voice';
 import Tts from 'react-native-tts';
-import LinearGradient from 'react-native-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ALL_MODELS, downloadModel, IrisModel } from '../services/ModelService';
 import IrisSidebar from '../components/IrisSidebar';
+import MessageBubble from '../components/conversation/MessageBubble';
+import EditMessageModal from '../components/conversation/EditMessageModal';
+import TypingIndicator from '../components/conversation/TypingIndicator';
 import {
   Conversation,
   createConversation,
@@ -20,6 +22,10 @@ import {
   togglePinMessage,
   togglePin,
   getConversation,
+  addMessageVariant,
+  setActiveVariant,
+  editUserMessage,
+  forkConversation,
 } from '../services/conversationStore';
 import { showConversationExportMenu } from '../services/conversationExport';
 // ── Inline PDF/HTML builder — generates a shareable HTML file, no extra deps
@@ -61,6 +67,11 @@ interface Message {
   timestamp?: string;
   isStarred?: boolean;
   isPinned?: boolean;
+  // ── Branching (mirrors conversationStore.Message, kept optional) ──
+  parentId?: string;
+  variants?: Array<{ id: string; text: string; timestamp: string }>;
+  activeVariantIndex?: number;
+  editedFrom?: string;
 }
 
 const PROMPTS = [
@@ -71,6 +82,9 @@ const PROMPTS = [
 ];
 
 export default function ChatScreen({ navigation }: any) {
+  const { isIncognito, disableIncognito } = useIncognito();
+  const hasVoiceNativeModule = !!NativeModules.Voice;
+
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [needsModel, setNeedsModel] = useState(false);
@@ -81,13 +95,49 @@ export default function ChatScreen({ navigation }: any) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [editingMessage, setEditingMessage] = useState<{ id: string; text: string } | null>(null);
+  const [engineError, setEngineError] = useState<string | null>(null);
+  const [regeneratingMsgId, setRegeneratingMsgId] = useState<string | null>(null);
   const activeConversationId = useRef<string | null>(null);
   const pendingFolderId = useRef<string | null>(null);
   const [currentActiveModel, setCurrentActiveModel] = useState("No active model");
   const isFocused = useIsFocused();
   const flatListRef = useRef<FlatList>(null);
+  const isTtsReadyRef = useRef(false);
+
+  const stopSpeaking = async () => {
+    if (!isTtsReadyRef.current) return;
+    try {
+      await Tts.stop();
+    } catch {}
+  };
+
+  const speakText = async (text: string) => {
+    const cleaned = text.replace(/<[^>]*>?/gm, '').trim();
+    if (!cleaned || !isTtsReadyRef.current) return;
+    try {
+      await Tts.speak(cleaned);
+    } catch {}
+  };
+
+  const describeEngineError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('Missing JSI bindings')) {
+      return 'AI engine native module is unavailable. Clean and rebuild the Android app.';
+    }
+    return message;
+  };
+
+  useEffect(() => {
+    if (!isIncognito) {
+      activeConversationId.current = null;
+      setMessages([]);
+      setInputText('');
+    }
+  }, [isIncognito]);
 
   const loadEngine = async () => {
+    setEngineError(null);
     let activeModelPath = null;
     let modelNameForDrawer = "No active model";
     const savedModelName = await AsyncStorage.getItem('ACTIVE_MODEL_NAME');
@@ -120,23 +170,50 @@ export default function ChatScreen({ navigation }: any) {
         const ctx = await initLlama({ model: activeModelPath, use_mlock: false, n_ctx: 2048 });
         setLlamaContext(ctx);
         setCurrentLoadedPath(activeModelPath);
-      } catch (err) { console.error("Engine failed:", err); }
+      } catch (err) {
+        const message = describeEngineError(err);
+        setLlamaContext(null);
+        setCurrentLoadedPath(null);
+        setEngineError(message);
+        ToastAndroid.show(message, ToastAndroid.LONG);
+        console.warn('Engine init failed:', message);
+      }
     }
   };
 
   useEffect(() => {
-    Tts.setDefaultLanguage('en-US');
-    Tts.setDefaultRate(0.5);
-    Voice.onSpeechStart = () => { setIsListening(true); Tts.stop(); };
-    Voice.onSpeechEnd = () => setIsListening(false);
-    Voice.onSpeechError = () => setIsListening(false);
-    Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
-    Voice.onSpeechResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
+    Tts.getInitStatus()
+      .then(() => {
+        isTtsReadyRef.current = true;
+        Tts.setDefaultLanguage('en-US');
+        Tts.setDefaultRate(0.5);
+      })
+      .catch((err: any) => {
+        isTtsReadyRef.current = false;
+        console.warn('TTS init failed:', err?.message || err);
+      });
+
+    if (hasVoiceNativeModule) {
+      Voice.onSpeechStart = () => { setIsListening(true); void stopSpeaking(); };
+      Voice.onSpeechEnd = () => setIsListening(false);
+      Voice.onSpeechError = () => setIsListening(false);
+      Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
+      Voice.onSpeechResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
+    }
+
     if (isFocused) loadEngine();
-    return () => { Voice.destroy().then(Voice.removeAllListeners); Tts.stop(); };
-  }, [isFocused]);
+
+    return () => {
+      setIsListening(false);
+      void stopSpeaking();
+      if (hasVoiceNativeModule) {
+        Voice.removeAllListeners();
+      }
+    };
+  }, [hasVoiceNativeModule, isFocused]);
 
   const startListening = async () => {
+    if (!hasVoiceNativeModule) return;
     if (isListening) await Voice.stop();
     else { setInputText(''); await Voice.start('en-US'); }
   };
@@ -146,7 +223,7 @@ export default function ChatScreen({ navigation }: any) {
     activeConversationId.current = null;
     setTimeout(() => {
       if (isGenerating && llamaContext) { try { llamaContext.stopCompletion(); } catch (e) {} }
-      Tts.stop();
+      void stopSpeaking();
       setMessages([]);
       setInputText('');
       setIsGenerating(false);
@@ -164,6 +241,10 @@ export default function ChatScreen({ navigation }: any) {
       timestamp: m.timestamp,
       isStarred: m.isStarred,
       isPinned: m.isPinned,
+      parentId: m.parentId,
+      variants: m.variants as any,
+      activeVariantIndex: m.activeVariantIndex,
+      editedFrom: m.editedFrom,
     }));
     setMessages(mapped);
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
@@ -186,7 +267,6 @@ export default function ChatScreen({ navigation }: any) {
   const handleToggleStarMessage = (messageId: string) => {
     const convId = activeConversationId.current;
     if (!convId) return;
-
     toggleStarMessage(convId, messageId);
     setMessages(prev =>
       prev.map(msg =>
@@ -198,7 +278,6 @@ export default function ChatScreen({ navigation }: any) {
   const handleTogglePinMessage = (messageId: string) => {
     const convId = activeConversationId.current;
     if (!convId) return;
-
     togglePinMessage(convId, messageId);
     setMessages(prev =>
       prev.map(msg =>
@@ -207,7 +286,271 @@ export default function ChatScreen({ navigation }: any) {
     );
   };
 
+  // ── Branch handlers ───────────────────────────────────────────────────────
+
+  const handleEditMessage = async (msgId: string, newText: string) => {
+    const convId = activeConversationId.current;
+    if (!convId || isGenerating) return;
+    const updatedConv = editUserMessage(convId, msgId, newText);
+    if (!updatedConv) return;
+
+    const userMsg = updatedConv.messages.find(m => m.id === msgId);
+    if (!userMsg) return;
+
+    // Find the assistant reply: first by parentId, then by position (message right after the edited one)
+    const currentMessages = messages;
+    const editedIndex = currentMessages.findIndex(m => m.id === msgId);
+    const nextMsg = editedIndex >= 0 ? currentMessages[editedIndex + 1] : undefined;
+    const assistantMsg =
+      updatedConv.messages.find(m => m.sender === 'assistant' && m.parentId === msgId) ??
+      (nextMsg && !nextMsg.isUser ? updatedConv.messages.find(m => m.id === nextMsg.id) : undefined);
+
+    // Rebuild local messages from store, then immediately clear the assistant bubble text
+    const mapped = updatedConv.messages.map(m => ({
+      id: m.id,
+      text: m.text,
+      isUser: m.sender === 'user',
+      timestamp: m.timestamp,
+      isStarred: m.isStarred,
+      isPinned: m.isPinned,
+      parentId: m.parentId,
+      variants: m.variants as any,
+      activeVariantIndex: m.activeVariantIndex,
+      editedFrom: m.editedFrom,
+    }));
+
+    const botMsgId = `edit_${Date.now()}`;
+
+    if (assistantMsg) {
+      // Replace existing assistant bubble in-place (clear its text so streaming fills it)
+      setMessages(mapped.map(m => m.id === assistantMsg.id ? { ...m, text: '' } : m));
+    } else {
+      // No existing assistant bubble — append a placeholder right after the user message
+      const userIdx = mapped.findIndex(m => m.id === msgId);
+      const newBotBubble = {
+        id: botMsgId,
+        text: '',
+        isUser: false,
+        timestamp: new Date().toISOString(),
+        parentId: msgId,
+        isStarred: false,
+        isPinned: false,
+        variants: undefined,
+        activeVariantIndex: undefined,
+        editedFrom: undefined,
+      };
+      mapped.splice(userIdx + 1, 0, newBotBubble);
+      setMessages([...mapped]);
+    }
+
+    setIsGenerating(true);
+    setRegeneratingMsgId(assistantMsg ? assistantMsg.id : botMsgId);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
+
+    if (!llamaContext) {
+      // Restore the original assistant text (if in-place) or remove the placeholder (if new)
+      setMessages(prev => assistantMsg
+        ? prev.map(m => m.id === assistantMsg.id ? { ...m, text: assistantMsg.text } : m)
+        : prev.filter(m => m.id !== botMsgId)
+      );
+      setIsGenerating(false);
+      setRegeneratingMsgId(null);
+      return;
+    }
+
+    const formattedPrompt = `<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n${userMsg.text}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`;
+    let fullResponse = '';
+    try {
+      await llamaContext.completion(
+        { prompt: formattedPrompt, n_predict: 256, temperature: 0.7 },
+        (result: any) => {
+          fullResponse += result.token;
+          setMessages(prev => prev.map(m =>
+            m.id === (assistantMsg?.id ?? botMsgId) ? { ...m, text: m.text + result.token } : m
+          ));
+        }
+      );
+      if (fullResponse.trim().length > 0) {
+        await speakText(fullResponse);
+        if (assistantMsg) {
+          addMessageVariant(convId, msgId, fullResponse);
+          const refreshed = getConversation(convId);
+          if (refreshed) {
+            setMessages(refreshed.messages.map(m => ({
+              id: m.id,
+              text: m.text,
+              isUser: m.sender === 'user',
+              timestamp: m.timestamp,
+              isStarred: m.isStarred,
+              isPinned: m.isPinned,
+              parentId: m.parentId,
+              variants: m.variants as any,
+              activeVariantIndex: m.activeVariantIndex,
+              editedFrom: m.editedFrom,
+            })));
+          }
+        } else {
+          const storedBotMsg = storeAddMessage(convId, fullResponse, 'assistant', msgId);
+          setMessages(prev => prev.map(m => m.id === botMsgId ? {
+            ...m,
+            id: storedBotMsg.id,
+            text: fullResponse,
+            timestamp: storedBotMsg.timestamp,
+            isStarred: storedBotMsg.isStarred,
+            isPinned: storedBotMsg.isPinned,
+            parentId: storedBotMsg.parentId,
+          } : m));
+        }
+      }
+    } catch (err) {
+      console.error('Edit regeneration crashed:', err);
+      setMessages(prev => assistantMsg
+        ? prev.map(m => m.id === assistantMsg.id ? { ...m, text: assistantMsg.text } : m)
+        : prev.filter(m => m.id !== botMsgId)
+      );
+    } finally {
+      setIsGenerating(false);
+      setRegeneratingMsgId(null);
+    }
+  };
+
+  const handleRetry = async (assistantMsgId: string) => {
+    const convId = activeConversationId.current;
+    if (!convId || isGenerating) return;
+    const storedConv = getConversation(convId);
+    const assistantMsg = storedConv?.messages.find(m => m.id === assistantMsgId);
+    if (!assistantMsg?.parentId) return;
+    const userMsgId = assistantMsg.parentId;
+    const userMsg = storedConv?.messages.find(m => m.id === userMsgId);
+    if (!userMsg) return;
+
+    // Clear the existing assistant bubble in-place
+    const originalText = assistantMsg.text;
+    setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, text: '' } : m));
+    setIsGenerating(true);
+    setRegeneratingMsgId(assistantMsgId);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
+
+    if (!llamaContext) {
+      setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, text: originalText } : m));
+      setIsGenerating(false);
+      setRegeneratingMsgId(null);
+      return;
+    }
+    const formattedPrompt = `<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n${userMsg.text}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`;
+    let fullResponse = '';
+    try {
+      await llamaContext.completion(
+        { prompt: formattedPrompt, n_predict: 256, temperature: 0.7 },
+        (result: any) => {
+          fullResponse += result.token;
+          setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, text: m.text + result.token } : m));
+        }
+      );
+      if (fullResponse.trim().length > 0) {
+        await speakText(fullResponse);
+        addMessageVariant(convId, userMsgId, fullResponse);
+        const updated = getConversation(convId);
+        if (updated) {
+          setMessages(updated.messages.map(m => ({
+            id: m.id, text: m.text, isUser: m.sender === 'user',
+            timestamp: m.timestamp, isStarred: m.isStarred, isPinned: m.isPinned,
+            parentId: m.parentId, variants: m.variants as any, activeVariantIndex: m.activeVariantIndex,
+            editedFrom: m.editedFrom,
+          })));
+        }
+      } else {
+        setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, text: originalText } : m));
+      }
+    } catch (err) {
+      console.error('Retry crashed:', err);
+      setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, text: originalText } : m));
+    } finally {
+      setIsGenerating(false);
+      setRegeneratingMsgId(null);
+    }
+  };
+
+  const handleFork = (msgId: string) => {
+    const convId = activeConversationId.current;
+    if (!convId) {
+      ToastAndroid.show('No active conversation to fork.', ToastAndroid.SHORT);
+      return;
+    }
+    const forked = forkConversation(convId, msgId);
+    if (!forked) {
+      ToastAndroid.show('Could not fork conversation.', ToastAndroid.SHORT);
+      return;
+    }
+    ToastAndroid.show('Conversation forked!', ToastAndroid.SHORT);
+    handleSelectConversation(forked);
+  };
+
+  const handlePrevVariant = (assistantMsgId: string) => {
+    const convId = activeConversationId.current;
+    if (!convId) return;
+    const msg = messages.find(m => m.id === assistantMsgId);
+    if (!msg || !msg.variants) return;
+    const current = msg.activeVariantIndex ?? msg.variants.length - 1;
+    const next = Math.max(0, current - 1);
+    setActiveVariant(convId, assistantMsgId, next);
+    setMessages(prev => {
+      const updated = prev.map(m =>
+        m.id === assistantMsgId
+          ? { ...m, activeVariantIndex: next, text: m.variants?.[next]?.text ?? m.text }
+          : m
+      );
+      if (msg.isUser) {
+        const linkedAssistant = updated.find(m => !m.isUser && m.parentId === assistantMsgId);
+        if (linkedAssistant?.variants?.length) {
+          const linkedIndex = Math.min(next, linkedAssistant.variants.length - 1);
+          setActiveVariant(convId, linkedAssistant.id, linkedIndex);
+          return updated.map(m =>
+            m.id === linkedAssistant.id
+              ? { ...m, activeVariantIndex: linkedIndex, text: m.variants?.[linkedIndex]?.text ?? m.text }
+              : m
+          );
+        }
+      }
+      return updated;
+    });
+  };
+
+  const handleNextVariant = (assistantMsgId: string) => {
+    const convId = activeConversationId.current;
+    if (!convId) return;
+    const msg = messages.find(m => m.id === assistantMsgId);
+    if (!msg || !msg.variants) return;
+    const current = msg.activeVariantIndex ?? msg.variants.length - 1;
+    const next = Math.min(msg.variants.length - 1, current + 1);
+    setActiveVariant(convId, assistantMsgId, next);
+    setMessages(prev => {
+      const updated = prev.map(m =>
+        m.id === assistantMsgId
+          ? { ...m, activeVariantIndex: next, text: m.variants?.[next]?.text ?? m.text }
+          : m
+      );
+      if (msg.isUser) {
+        const linkedAssistant = updated.find(m => !m.isUser && m.parentId === assistantMsgId);
+        if (linkedAssistant?.variants?.length) {
+          const linkedIndex = Math.min(next, linkedAssistant.variants.length - 1);
+          setActiveVariant(convId, linkedAssistant.id, linkedIndex);
+          return updated.map(m =>
+            m.id === linkedAssistant.id
+              ? { ...m, activeVariantIndex: linkedIndex, text: m.variants?.[linkedIndex]?.text ?? m.text }
+              : m
+          );
+        }
+      }
+      return updated;
+    });
+  };
+
   const handleTogglePinConversation = () => {
+    if (isIncognito) {
+      ToastAndroid.show('Pinning not available in Incognito mode.', ToastAndroid.SHORT);
+      return;
+    }
     const convId = activeConversationId.current;
     if (!convId) {
       ToastAndroid.show('No conversation to pin yet.', ToastAndroid.SHORT);
@@ -254,9 +597,48 @@ export default function ChatScreen({ navigation }: any) {
   const sendMessage = async (text: string = inputText) => {
     if (!text.trim() || isGenerating) return;
     if (isListening) await Voice.stop();
-    Tts.stop();
+    await stopSpeaking();
 
-    // Auto-create a conversation on the first message of a blank chat
+    // ── INCOGNITO PATH — RAM only, no conversationStore calls ────────────────
+    if (isIncognito) {
+      const tempUser = addTempMessage(text, true);
+      const botMsgId = `tmp_bot_${Date.now()}`;
+      const tempBot: Message = { id: botMsgId, text: '', isUser: false,
+        timestamp: new Date().toISOString(), isStarred: false, isPinned: false };
+      setMessages(prev => [...prev, { ...tempUser, isUser: true }, tempBot]);
+      setInputText('');
+      setIsGenerating(true);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
+
+      if (!llamaContext) {
+        const errText = 'Error: AI not loaded.';
+        setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, text: errText } : m));
+        addTempMessage(errText, false);
+        setIsGenerating(false);
+        return;
+      }
+      const formattedPrompt = `<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n${text}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`;
+      let fullResponse = '';
+      try {
+        await llamaContext.completion(
+          { prompt: formattedPrompt, n_predict: 256, temperature: 0.7 },
+          (result: any) => {
+            fullResponse += result.token;
+            setMessages(prev => prev.map(m =>
+              m.id === botMsgId ? { ...m, text: m.text + result.token } : m
+            ));
+          }
+        );
+        if (fullResponse.trim().length > 0) {
+          await speakText(fullResponse);
+          addTempMessage(fullResponse, false); // RAM only
+        }
+      } catch (err) { console.error('Incognito generation crashed:', err); }
+      finally { setIsGenerating(false); }
+      return;
+    }
+
+    // ── NORMAL PATH — persists to conversationStore + AsyncStorage ───────────
     if (!activeConversationId.current) {
       const conv = createConversation(pendingFolderId.current);
       activeConversationId.current = conv.id;
@@ -285,18 +667,19 @@ export default function ChatScreen({ navigation }: any) {
     setMessages(prev => [...prev, newUserMsg, newBotMsg]);
     setInputText('');
     setIsGenerating(true);
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
 
     if (!llamaContext) {
       const errText = "Error: AI not loaded.";
       setMessages(prev => prev.map(msg => msg.id === botMsgId ? { ...msg, text: errText } : msg));
-      const storedBotMsg = storeAddMessage(convId, errText, 'assistant');
+      const storedBotMsg = storeAddMessage(convId, errText, 'assistant', storedUserMsg.id);
       setMessages(prev => prev.map(msg => msg.id === botMsgId ? {
         ...msg,
         id: storedBotMsg.id,
-          timestamp: storedBotMsg.timestamp,
-          isPinned: storedBotMsg.isPinned,
-        } : msg));
+        timestamp: storedBotMsg.timestamp,
+        isPinned: storedBotMsg.isPinned,
+        parentId: storedBotMsg.parentId,
+      } : msg));
       setIsGenerating(false); return;
     }
     const formattedPrompt = `<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n${text}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`;
@@ -310,14 +693,15 @@ export default function ChatScreen({ navigation }: any) {
         }
       );
       if (fullResponse.trim().length > 0) {
-        Tts.speak(fullResponse.replace(/<[^>]*>?/gm, ''));
-        const storedBotMsg = storeAddMessage(convId, fullResponse, 'assistant');
+        await speakText(fullResponse);
+        const storedBotMsg = storeAddMessage(convId, fullResponse, 'assistant', storedUserMsg.id);
         setMessages(prev => prev.map(msg => msg.id === botMsgId ? {
           ...msg,
           id: storedBotMsg.id,
           timestamp: storedBotMsg.timestamp,
           isStarred: storedBotMsg.isStarred,
           isPinned: storedBotMsg.isPinned,
+          parentId: storedBotMsg.parentId,
         } : msg));
       }
     } catch (error) { console.error("Generation crashed:", error); }
@@ -325,7 +709,7 @@ export default function ChatScreen({ navigation }: any) {
   };
 
   return (
-    <LinearGradient colors={['#050a14', '#051633']} style={styles.container}>
+    <View style={styles.container}>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -349,6 +733,12 @@ export default function ChatScreen({ navigation }: any) {
                 </View>
               ))}
             </View>
+          </View>
+        )}
+
+        {!!engineError && !needsModel && (
+          <View style={styles.engineBanner}>
+            <Text style={styles.engineBannerText}>{engineError}</Text>
           </View>
         )}
 
@@ -428,7 +818,7 @@ export default function ChatScreen({ navigation }: any) {
                   style={styles.pinnedBar}
                   onPress={() => {
                     if (pinnedIndex >= 0) {
-                      flatListRef.current?.scrollToIndex({ index: pinnedIndex, animated: true, viewPosition: 0.3 });
+                      flatListRef.current?.scrollToIndex({ index: pinnedIndex, animated: false, viewPosition: 0.3 });
                     }
                   }}
                 >
@@ -443,36 +833,52 @@ export default function ChatScreen({ navigation }: any) {
               ref={flatListRef} data={messages} keyExtractor={(item) => item.id}
               contentContainerStyle={styles.chatContainer}
               keyboardShouldPersistTaps="handled"
-              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
               onScrollToIndexFailed={(info) => {
-                setTimeout(() => flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.3 }), 300);
+                setTimeout(() => flatListRef.current?.scrollToIndex({ index: info.index, animated: false, viewPosition: 0.3 }), 300);
               }}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  delayLongPress={250}
-                  onLongPress={() =>
-                    requestAnimationFrame(() => Alert.alert('Message actions', 'Choose an action', [
-                      {
-                        text: item.isPinned ? 'Unpin' : 'Pin',
-                        onPress: () => handleTogglePinMessage(item.id),
-                      },
-                      {
-                        text: item.isStarred ? 'Unstar' : 'Star',
-                        onPress: () => handleToggleStarMessage(item.id),
-                      },
-                      { text: 'Cancel', style: 'cancel' },
-                    ]))
-                  }
-                  style={[styles.messageBubble, item.isUser ? styles.userBubble : styles.botBubble]}
-                >
-                  <Text style={styles.messageText}>{item.text}</Text>
-                  <View style={styles.messageMeta}>
-                    {!!item.isPinned && <Text style={styles.pinBadge}>PIN</Text>}
-                    {!!item.isStarred && <Text style={styles.starBadge}>STAR</Text>}
-                  </View>
-                </TouchableOpacity>
-              )}
+              renderItem={({ item }) => {
+                // Show TypingIndicator while this specific bubble is being regenerated
+                if (!item.isUser && item.id === regeneratingMsgId && item.text === '') {
+                  return <TypingIndicator />;
+                }
+                // Convert local Message shape to the shape MessageBubble expects
+                const storeMsg = {
+                  id: item.id,
+                  text: item.text,
+                  sender: (item.isUser ? 'user' : 'assistant') as 'user' | 'assistant',
+                  timestamp: item.timestamp ?? new Date().toISOString(),
+                  isStarred: !!item.isStarred,
+                  isPinned: !!item.isPinned,
+                  parentId: item.parentId,
+                  variants: item.variants as any,
+                  activeVariantIndex: item.activeVariantIndex,
+                  editedFrom: item.editedFrom,
+                };
+                const convId = activeConversationId.current;
+                return (
+                  <MessageBubble
+                    message={storeMsg}
+                    onPin={() => handleTogglePinMessage(item.id)}
+                    onStar={() => handleToggleStarMessage(item.id)}
+                    onEdit={!isIncognito && convId && item.isUser
+                      ? () => setEditingMessage({ id: item.id, text: item.text })
+                      : undefined}
+                    onRetry={!isIncognito && convId && !item.isUser
+                      ? () => handleRetry(item.id)
+                      : undefined}
+                    onFork={!isIncognito && convId
+                      ? () => handleFork(item.id)
+                      : undefined}
+                    onPrevVariant={!isIncognito && convId && item.variants && item.variants.length > 1
+                      ? () => handlePrevVariant(item.id)
+                      : undefined}
+                    onNextVariant={!isIncognito && convId && item.variants && item.variants.length > 1
+                      ? () => handleNextVariant(item.id)
+                      : undefined}
+                  />
+                );
+              }}
             />
           </>
         )}
@@ -510,6 +916,17 @@ export default function ChatScreen({ navigation }: any) {
       </KeyboardAvoidingView>
 
       {/* Unified Iris Sidebar — conversation management + brand info */}
+      <EditMessageModal
+        visible={!!editingMessage}
+        initialText={editingMessage?.text ?? ''}
+        onCancel={() => setEditingMessage(null)}
+        onConfirm={async (newText) => {
+          if (!editingMessage) return;
+          const editId = editingMessage.id;
+          setEditingMessage(null);
+          await handleEditMessage(editId, newText);
+        }}
+      />
       <IrisSidebar
         visible={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -520,12 +937,12 @@ export default function ChatScreen({ navigation }: any) {
           clearChat();
         }}
       />
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: '#050a14' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -537,6 +954,28 @@ const styles = StyleSheet.create({
   hamburgerBtn: { padding: 10, gap: 5, justifyContent: 'center' },
   hamburgerLine: { width: 22, height: 2, backgroundColor: '#ffffff', borderRadius: 2 },
   headerTitle: { color: '#ffffff', fontSize: 28, fontWeight: '500' },
+  headerTitleIncognito: { color: '#c4b5fd' },
+  // Incognito banner
+  incognitoBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(88,28,135,0.35)',
+    borderWidth: 1, borderColor: 'rgba(167,139,250,0.3)',
+    marginHorizontal: 12, borderRadius: 10, gap: 6,
+    paddingHorizontal: 12,
+  },
+  engineBanner: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(127,29,29,0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.45)',
+  },
+  engineBannerText: { color: '#fecaca', fontSize: 12, lineHeight: 18, textAlign: 'center' },
+  incognitoIcon: { fontSize: 14 },
+  incognitoText: { color: '#c4b5fd', fontSize: 12, fontWeight: '500', letterSpacing: 0.3 },
   headerIcons: { flexDirection: 'row', gap: 24 },
   exportText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
   headerIconImage: { width: 24, height: 24, tintColor: '#ffffff' },
@@ -566,13 +1005,6 @@ const styles = StyleSheet.create({
   promptCard: { backgroundColor: 'rgba(255, 255, 255, 0.05)', width: 200, height: 100, justifyContent: 'center', alignItems: 'center', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   promptText: { color: '#A0A0A5', fontSize: 13, textAlign: 'center' },
   chatContainer: { padding: 16, flexGrow: 1, justifyContent: 'flex-end' },
-  messageBubble: { maxWidth: '85%', padding: 14, borderRadius: 18, marginBottom: 12 },
-  userBubble: { alignSelf: 'flex-end', backgroundColor: '#171E2C', borderBottomRightRadius: 4 },
-  botBubble: { alignSelf: 'flex-start', backgroundColor: 'transparent' },
-  messageText: { color: '#E2E8F0', fontSize: 16, lineHeight: 24 },
-  messageMeta: { flexDirection: 'row', gap: 8, marginTop: 6 },
-  pinBadge: { color: '#F59E0B', fontSize: 11, fontWeight: '700' },
-  starBadge: { color: '#F59E0B', fontSize: 11, fontWeight: '700' },
   inputAreaWrapper: { padding: 12, paddingBottom: Platform.OS === 'ios' ? 24 : 12 },
   inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#171E2C', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   input: { flex: 1, color: '#ffffff', fontSize: 16, paddingVertical: 10 },
