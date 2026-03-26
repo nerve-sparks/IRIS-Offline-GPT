@@ -16,16 +16,16 @@ import DeviceInfo from 'react-native-device-info';
 import RNFS from 'react-native-fs';
 import { initLlama } from 'llama.rn';
 import AsyncStorage from '@react-native-async-storage/async-storage'; // 🔥 Fetch Current Model
-import NerveSparksDrawer from '../components/NerveSparksDrawer';
+// import NerveSparksDrawer from '../components/NerveSparksDrawer';
 
 export default function BenchmarkScreen() {
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [touchStartX, setTouchStartX] = useState(0);
+  // const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  // const [touchStartX, setTouchStartX] = useState(0);
 
-  const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
-  const handleTouchEnd = (e: any) => {
-    if (e.nativeEvent.pageX - touchStartX > 50) setIsDrawerOpen(true);
-  };
+  // const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
+  // const handleTouchEnd = (e: any) => {
+  //   if (e.nativeEvent.pageX - touchStartX > 50) setIsDrawerOpen(true);
+  // };
 
   const [isRunning, setIsRunning] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -134,7 +134,7 @@ export default function BenchmarkScreen() {
   };
 
   return (
-    <LinearGradient colors={['#050a14', '#051633']} style={styles.container} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <LinearGradient colors={['#050a14', '#051633']} style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
@@ -203,7 +203,7 @@ export default function BenchmarkScreen() {
           </View>
         </Modal>
 
-        <NerveSparksDrawer visible={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} activeModelName={hardwareInfo.model} />
+        {/* <NerveSparksDrawer visible={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} activeModelName={hardwareInfo.model} /> */}
       </SafeAreaView>
     </LinearGradient>
   );

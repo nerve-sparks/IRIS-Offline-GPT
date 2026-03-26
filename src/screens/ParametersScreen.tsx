@@ -12,7 +12,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import Slider from '@react-native-community/slider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import NerveSparksDrawer from '../components/NerveSparksDrawer';
+// import NerveSparksDrawer from '../components/NerveSparksDrawer';
 
 const SettingSection = ({ title, description, value, onValueChange, min, max, step }: any) => (
   <View style={styles.section}>
@@ -36,13 +36,13 @@ const SettingSection = ({ title, description, value, onValueChange, min, max, st
 );
 
 export default function ParametersScreen({ navigation }: any) {
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [touchStartX, setTouchStartX] = useState(0);
+  // const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  // const [touchStartX, setTouchStartX] = useState(0);
 
-  const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
-  const handleTouchEnd = (e: any) => {
-    if (e.nativeEvent.pageX - touchStartX > 50) setIsDrawerOpen(true);
-  };
+  // const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
+  // const handleTouchEnd = (e: any) => {
+  //   if (e.nativeEvent.pageX - touchStartX > 50) setIsDrawerOpen(true);
+  // };
 
   const [thread, setThread] = useState(0);
   const [temp, setTemp] = useState(0.70);
@@ -96,7 +96,7 @@ export default function ParametersScreen({ navigation }: any) {
   };
 
   return (
-    <LinearGradient colors={['#050a14', '#051633']} style={styles.container} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <LinearGradient colors={['#050a14', '#051633']} style={styles.container}>
       {/* 🔥 THE FIX: Removed top/bottom automatic padding so it aligns exactly under your header */}
       <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
         
@@ -128,7 +128,7 @@ export default function ParametersScreen({ navigation }: any) {
 
         </ScrollView>
 
-        <NerveSparksDrawer visible={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} activeModelName="No active model" />
+        {/* <NerveSparksDrawer visible={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} activeModelName="No active model" /> */}
       </SafeAreaView>
     </LinearGradient>
   );

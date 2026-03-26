@@ -74,7 +74,7 @@ export default function NerveSparksDrawer({ visible, onClose, activeModelName = 
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.actionBtn} onPress={openWebsite}>
-                <Text style={styles.actionBtnText}>NerveSparks.com</Text>
+                <Text style={styles.actionBtnText}>Nervesparks</Text>
               </TouchableOpacity>
 
               <Text style={styles.footerText}>powered by llama.rn</Text>

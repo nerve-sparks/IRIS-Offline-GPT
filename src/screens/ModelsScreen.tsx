@@ -215,7 +215,7 @@ import { pick, isCancel } from '@react-native-documents/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ALL_MODELS, downloadModel } from '../services/ModelService'; 
 import ModelCard from '../components/ModelCard';
-import NerveSparksDrawer from '../components/NerveSparksDrawer';
+// import NerveSparksDrawer from '../components/NerveSparksDrawer';
 
 export default function ModelsScreen({ navigation }: any) {
   const [fileStates, setFileStates] = useState<Record<string, { exists: boolean, size: string }>>({});
@@ -232,11 +232,11 @@ export default function ModelsScreen({ navigation }: any) {
 
   const [isFabExpanded, setIsFabExpanded] = useState(false);
   const isFocused = useIsFocused();
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [touchStartX, setTouchStartX] = useState(0);
+  // const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  // const [touchStartX, setTouchStartX] = useState(0);
 
-  const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
-  const handleTouchEnd = (e: any) => { if (e.nativeEvent.pageX - touchStartX > 50) setIsDrawerOpen(true); };
+  // const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
+  // const handleTouchEnd = (e: any) => { if (e.nativeEvent.pageX - touchStartX > 50) setIsDrawerOpen(true); };
 
   useEffect(() => {
     if (loadingModel) {
@@ -368,7 +368,7 @@ export default function ModelsScreen({ navigation }: any) {
   const filteredCustom = customModels.filter(m => m.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
-    <View style={styles.container} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <View style={styles.container} >
       <LinearGradient colors={['#050a14', '#051633']} style={styles.container}>
         
         <View style={styles.searchContainer}>
@@ -453,8 +453,8 @@ export default function ModelsScreen({ navigation }: any) {
           <Text style={[styles.mainFabIcon, isFabExpanded && styles.mainFabIconOpen]}>{isFabExpanded ? '×' : '+'}</Text>
         </TouchableOpacity>
       </View>
-
-      <NerveSparksDrawer visible={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} activeModelName={activeModel || "No active model"} />
+{/* 
+      <NerveSparksDrawer visible={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} activeModelName={activeModel || "No active model"} /> */}
 
       <Modal visible={!!loadingModel} transparent animationType="fade">
         <View style={styles.loadingScreenOverlay}>

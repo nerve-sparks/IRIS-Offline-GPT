@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import NerveSparksDrawer from '../components/NerveSparksDrawer'; // 🔥 Drawer Import kiya
+// import NerveSparksDrawer from '../components/NerveSparksDrawer'; // 🔥 Drawer Import kiya
 
 export default function SettingsScreen({ navigation }: any) {
   // 🔥 DRAWER STATES
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [touchStartX, setTouchStartX] = useState(0);
+  // const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  // const [touchStartX, setTouchStartX] = useState(0);
   const [activeModel, setActiveModel] = useState("No active model");
 
   // 🔥 Fetch active model name for Drawer
@@ -22,19 +22,19 @@ export default function SettingsScreen({ navigation }: any) {
   }, []);
 
   // 🔥 SWIPE GESTURE LOGIC (Right swipe to open)
-  const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
-  const handleTouchEnd = (e: any) => {
-    if (e.nativeEvent.pageX - touchStartX > 50) {
-      setIsDrawerOpen(true);
-    }
-  };
+  // const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
+  // const handleTouchEnd = (e: any) => {
+  //   if (e.nativeEvent.pageX - touchStartX > 50) {
+  //     setIsDrawerOpen(true);
+  //   }
+  // };
 
   return (
     <LinearGradient 
       colors={['#050a14', '#051633']} 
       style={styles.container}
-      onTouchStart={handleTouchStart} // 🔥 Swipe Start
-      onTouchEnd={handleTouchEnd}     // 🔥 Swipe End
+      // onTouchStart={handleTouchStart} // 🔥 Swipe Start
+      // onTouchEnd={handleTouchEnd}      // 🔥 Swipe End
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.card}>
@@ -65,16 +65,28 @@ export default function SettingsScreen({ navigation }: any) {
             <Text style={styles.rowText}>About</Text>
             <Text style={styles.arrowIcon}>›</Text>
           </TouchableOpacity>
+          <View style={styles.divider} />
+
+          {/* 🔥 NEW REPORT ISSUE BUTTON */}
+          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('ReportScreen')}>
+            {/* Note: Maine alert/warning emoji use kiya hai taki tere icon size se match kare. 
+                Agar tere paas 'report.png' hai assets mein, toh tu isey Image tag se replace kar lena */}
+            <View style={{ width: 22, height: 22, justifyContent: 'center', alignItems: 'center', marginRight: 16 }}>
+               <Text style={{ fontSize: 18 }}>⚠️</Text>
+            </View>
+            <Text style={[styles.rowText, { color: '#ff6b6b' }]}>Report an Issue</Text>
+            <Text style={styles.arrowIcon}>›</Text>
+          </TouchableOpacity>
 
         </View>
       </ScrollView>
 
       {/* 🔥 THE DRAWER COMPONENT */}
-      <NerveSparksDrawer 
+      {/* <NerveSparksDrawer 
         visible={isDrawerOpen} 
         onClose={() => setIsDrawerOpen(false)} 
         activeModelName={activeModel} 
-      />
+      /> */}
 
     </LinearGradient>
   );

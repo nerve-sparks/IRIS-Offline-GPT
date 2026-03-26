@@ -49,6 +49,7 @@ import ParametersScreen from './src/screens/ParametersScreen';
 import BenchmarkScreen from './src/screens/BenchmarkScreen';
 import AboutScreen from './src/screens/AboutScreen';
 import SearchResultScreen from './src/screens/SearchResultScreen';
+import ReportScreen from './src/screens/ReportScreen'; 
 
 const Stack = createNativeStackNavigator();
 
@@ -71,6 +72,7 @@ export default function App() {
         <Stack.Screen name="Parameters" component={ParametersScreen} />
         <Stack.Screen name="Benchmark" component={BenchmarkScreen} />
         <Stack.Screen name="About" component={AboutScreen} />
+        <Stack.Screen name="ReportScreen" component={ReportScreen} options={{ headerShown: false }} />
         <Stack.Screen name="SearchResult" component={SearchResultScreen} options={{ title: 'Search Models' }} />
       </Stack.Navigator>
     </NavigationContainer>
