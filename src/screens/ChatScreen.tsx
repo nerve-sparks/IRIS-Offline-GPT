@@ -985,6 +985,7 @@ export default function ChatScreen({ navigation }: any) {
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [touchStartX, setTouchStartX] = useState(0);
+  const [touchStartY, setTouchStartY] =useState(0);
   const [currentActiveModel, setCurrentActiveModel] = useState("No active model");
   
   const isFocused = useIsFocused();
@@ -1204,9 +1205,30 @@ export default function ChatScreen({ navigation }: any) {
     finally { setIsGenerating(false); }
   };
 
-  const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
+  const handleTouchStart = (e: any) => {
+    setTouchStartX(e.nativeEvent.pageX);
+    setTouchStartY(e.nativeEvent.pageY); // 🔥 Touch ki height record kar rahe hain
+  };
+
   const handleTouchEnd = (e: any) => {
-    if (e.nativeEvent.pageX - touchStartX > 50) {
+    const screenWidth = Dimensions.get('window').width;
+    const screenHeight = Dimensions.get('window').height;
+    
+    // 🔥 SAFE ZONE LOGIC: 
+    // Agar touch screen ke bottom 30% hisse mein (jahan prompts aur chat box hain) shuru hua hai, 
+    // toh isey yahi rok do (return) taaki FlatList aaram se scroll ho sake.
+    if (touchStartY > screenHeight * 0.7) {
+      return; 
+    }
+
+    // 1. Check if touch started in the left 30% of the screen
+    const startedInLeftZone = touchStartX <= (screenWidth * 0.2);
+    
+    // 2. Calculate rightward swipe distance
+    const swipeDistance = e.nativeEvent.pageX - touchStartX;
+
+    // 3. Only open IF started on left edge AND swiped right
+    if (startedInLeftZone && swipeDistance > 50) {
       setIsDrawerOpen(true);
     }
   };

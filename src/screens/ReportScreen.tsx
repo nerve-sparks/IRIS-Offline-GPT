@@ -21,7 +21,7 @@ export default function ReportScreen({ navigation }: any) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    // Basic validation to prevent empty reports
+   
     if (issueText.trim().length === 0) {
       if (Platform.OS === 'android') ToastAndroid.show("Please write something first!", ToastAndroid.SHORT);
       else Alert.alert("Empty", "Please write something first!");
@@ -32,10 +32,10 @@ export default function ReportScreen({ navigation }: any) {
     setIsSubmitting(true);
 
     try {
-      // 🔥 THE MAGIC FIREBASE URL (Direct REST API, No SDK needed)
+      
       const FIREBASE_URL = 'src/assets/iris-ai.json';
 
-      // Wrapping data with extra context for your TL
+    
       const reportData = {
         issue: issueText,
         platform: Platform.OS, 

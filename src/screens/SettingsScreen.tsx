@@ -67,16 +67,12 @@ export default function SettingsScreen({ navigation }: any) {
           </TouchableOpacity>
           <View style={styles.divider} />
 
-          {/* 🔥 NEW REPORT ISSUE BUTTON */}
           <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('ReportScreen')}>
-            {/* Note: Maine alert/warning emoji use kiya hai taki tere icon size se match kare. 
-                Agar tere paas 'report.png' hai assets mein, toh tu isey Image tag se replace kar lena */}
-            <View style={{ width: 22, height: 22, justifyContent: 'center', alignItems: 'center', marginRight: 16 }}>
-               <Text style={{ fontSize: 18 }}>⚠️</Text>
-            </View>
-            <Text style={[styles.rowText, { color: '#ff6b6b' }]}>Report an Issue</Text>
+            <Image source={require('../assets/icons/report.png')} style={styles.menuIcon} />
+            <Text style={styles.rowText}>Report</Text>
             <Text style={styles.arrowIcon}>›</Text>
           </TouchableOpacity>
+          <View style={styles.divider} />
 
         </View>
       </ScrollView>
