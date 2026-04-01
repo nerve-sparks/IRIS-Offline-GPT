@@ -10,6 +10,7 @@ import Voice, { SpeechResultsEvent } from '@react-native-voice/voice';
 import Tts from 'react-native-tts';
 import LinearGradient from 'react-native-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DeviceInfo from 'react-native-device-info';
 import { ALL_MODELS, downloadModel, IrisModel } from '../services/ModelService';
 import IrisSidebar from '../components/IrisSidebar';
 import {
@@ -93,6 +94,9 @@ export default function ChatScreen({ navigation }: any) {
   const [currentActiveModel, setCurrentActiveModel] = useState("No active model");
   const isFocused = useIsFocused();
   const flatListRef = useRef<FlatList>(null);
+  
+  const [deviceRamMB, setDeviceRamMB] = useState<number>(0);
+  const [benchmarks, setBenchmarks] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!isIncognito) {
@@ -105,6 +109,15 @@ export default function ChatScreen({ navigation }: any) {
   const loadEngine = async () => {
     let activeModelPath = null;
     let modelNameForDrawer = "No active model";
+    
+    // 🔥 Fetch Hardware Info
+    try {
+      const totalMemBytes = await DeviceInfo.getTotalMemory();
+      setDeviceRamMB(Math.floor(totalMemBytes / (1024 * 1024)));
+      const savedBenchmarksRaw = await AsyncStorage.getItem('MODEL_BENCHMARKS');
+      if (savedBenchmarksRaw) setBenchmarks(JSON.parse(savedBenchmarksRaw));
+    } catch (e) { console.log(e); }
+
     const savedModelName = await AsyncStorage.getItem('ACTIVE_MODEL_NAME');
     if (savedModelName) {
       const modelObj = ALL_MODELS.find(m => m.name === savedModelName);
@@ -132,7 +145,15 @@ export default function ChatScreen({ navigation }: any) {
     if (activeModelPath !== currentLoadedPath) {
       if (llamaContext) { try { await llamaContext.release(); } catch(e) {} }
       try {
-        const ctx = await initLlama({ model: activeModelPath, use_mlock: false, n_ctx: 2048 });
+        const ctx = await initLlama({ 
+          model: activeModelPath, 
+          use_mlock: false, 
+          n_ctx: 2048,
+          n_gpu_layers: 99,           // Offload model computation to GPU (Vulkan/OpenCL)
+          flash_attn_type: "auto",    // Activate hardware-accelerated attention
+          cache_type_k: "q8_0",       // ~40% RAM savings for KV context cache
+          cache_type_v: "q8_0" 
+        });
         setLlamaContext(ctx);
         setCurrentLoadedPath(activeModelPath);
       } catch (err) { console.error("Engine failed:", err); }
@@ -142,16 +163,25 @@ export default function ChatScreen({ navigation }: any) {
   useEffect(() => {
     Tts.setDefaultLanguage('en-US');
     Tts.setDefaultRate(0.5);
-    Voice.onSpeechStart = () => { setIsListening(true); Tts.stop(); };
-    Voice.onSpeechEnd = () => setIsListening(false);
-    Voice.onSpeechError = () => setIsListening(false);
-    Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
-    Voice.onSpeechResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
+    
+    // Safely bind Voice events so the app doesn't crash if the native microphone module isn't linked yet
+    if (Voice) {
+      Voice.onSpeechStart = () => { setIsListening(true); Tts.stop(); };
+      Voice.onSpeechEnd = () => setIsListening(false);
+      Voice.onSpeechError = () => setIsListening(false);
+      Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
+      Voice.onSpeechResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
+    }
+
     if (isFocused) loadEngine();
-    return () => { Voice.destroy().then(Voice.removeAllListeners); Tts.stop(); };
+    return () => { 
+      if (Voice) { Voice.destroy().then(() => Voice.removeAllListeners()); }
+      Tts.stop(); 
+    };
   }, [isFocused]);
 
   const startListening = async () => {
+    if (!Voice) return ToastAndroid.show("Voice module not loaded", ToastAndroid.SHORT);
     if (isListening) await Voice.stop();
     else { setInputText(''); await Voice.start('en-US'); }
   };
@@ -305,7 +335,7 @@ export default function ChatScreen({ navigation }: any) {
       const formattedPrompt = `<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n${text}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`;
       let fullResponse = '';
       try {
-        await llamaContext.completion(
+        const resultPayload = await llamaContext.completion(
           { prompt: formattedPrompt, n_predict: 256, temperature: 0.7 },
           (result: any) => {
             fullResponse += result.token;
@@ -314,8 +344,17 @@ export default function ChatScreen({ navigation }: any) {
             ));
           }
         );
+        
+        // Log Timings
+        if (resultPayload && resultPayload.timings) {
+            const speed = resultPayload.timings.predicted_per_second.toFixed(1) + " tok/s";
+            const currentSaved = await AsyncStorage.getItem('MODEL_BENCHMARKS');
+            const benchmarks = currentSaved ? JSON.parse(currentSaved) : {};
+            benchmarks[currentActiveModel] = speed;
+            await AsyncStorage.setItem('MODEL_BENCHMARKS', JSON.stringify(benchmarks));
+        }
         if (fullResponse.trim().length > 0) {
-          Tts.speak(fullResponse.replace(/<[^>]*>?/gm, ''));
+          // Tts.speak(fullResponse.replace(/<[^>]*>?/gm, '')); // 🔥 Commented out automatic voice reading
           addTempMessage(fullResponse, false); // RAM only
         }
       } catch (err) { console.error('Incognito generation crashed:', err); }
@@ -369,15 +408,24 @@ export default function ChatScreen({ navigation }: any) {
     const formattedPrompt = `<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n${text}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`;
     let fullResponse = "";
     try {
-      await llamaContext.completion(
+      const resultPayload = await llamaContext.completion(
         { prompt: formattedPrompt, n_predict: 256, temperature: 0.7 },
         (result: any) => {
           fullResponse += result.token;
           setMessages(prev => prev.map(msg => msg.id === botMsgId ? { ...msg, text: msg.text + result.token } : msg));
         }
       );
+      
+      // Log Timings
+      if (resultPayload && resultPayload.timings) {
+          const speed = resultPayload.timings.predicted_per_second.toFixed(1) + " tok/s";
+          const currentSaved = await AsyncStorage.getItem('MODEL_BENCHMARKS');
+          const benchmarks = currentSaved ? JSON.parse(currentSaved) : {};
+          benchmarks[currentActiveModel] = speed;
+          await AsyncStorage.setItem('MODEL_BENCHMARKS', JSON.stringify(benchmarks));
+      }
       if (fullResponse.trim().length > 0) {
-        Tts.speak(fullResponse.replace(/<[^>]*>?/gm, ''));
+        // Tts.speak(fullResponse.replace(/<[^>]*>?/gm, '')); // 🔥 Commented out automatic voice reading
         const storedBotMsg = storeAddMessage(convId, fullResponse, 'assistant');
         setMessages(prev => prev.map(msg => msg.id === botMsgId ? {
           ...msg,
@@ -402,19 +450,31 @@ export default function ChatScreen({ navigation }: any) {
           <View style={[StyleSheet.absoluteFill, styles.modalOverlay]}>
             <View style={styles.modalBox}>
               <Text style={styles.modalTitle}>Download Required</Text>
-              {ALL_MODELS.map((model) => (
-                <View key={model.name} style={styles.modelCard}>
-                  <Text style={styles.modelNameText}>{model.name}</Text>
-                  <TouchableOpacity
-                    style={[styles.downloadBtn, downloading[model.name] && { backgroundColor: '#ef4444' }]}
-                    onPress={() => downloading[model.name] ? cancelDownload(model) : handleDownload(model)}
-                  >
-                    <Text style={styles.downloadBtnText}>
-                      {downloading[model.name] ? `Stop Download (${progresses[model.name] || 0}%)` : 'Download'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
+              {ALL_MODELS.map((model) => {
+                const isTooHeavy = !!model.minRamMB && model.minRamMB > deviceRamMB;
+                const isRecommended = !!model.minRamMB && model.minRamMB <= deviceRamMB;
+                const expectedSpeed = benchmarks[model.name] || model.expectedSpeed;
+                return (
+                  <View key={model.name} style={[styles.modelCard, isTooHeavy && { borderColor: 'rgba(239, 68, 68, 0.4)', borderWidth: 1 }]}>
+                    <Text style={[styles.modelNameText, isTooHeavy && { color: '#ef4444' }]} numberOfLines={1}>{model.name}</Text>
+                    
+                    <View style={styles.hardwareBadgeRow}>
+                      {isRecommended && <Text style={styles.recommendedBadge}>✓ Recommended for your device</Text>}
+                      {isTooHeavy && <Text style={styles.tooHeavyBadge}>⚠️ May crash (Requires more RAM)</Text>}
+                      {expectedSpeed && <Text style={styles.speedBadge}>⚡ Est. Speed: {expectedSpeed}</Text>}
+                    </View>
+
+                    <TouchableOpacity
+                      style={[styles.downloadBtn, downloading[model.name] && { backgroundColor: '#ef4444' }]}
+                      onPress={() => downloading[model.name] ? cancelDownload(model) : handleDownload(model)}
+                    >
+                      <Text style={styles.downloadBtnText}>
+                        {downloading[model.name] ? `Stop Download (${progresses[model.name] || 0}%)` : 'Download'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
             </View>
           </View>
         )}
@@ -664,10 +724,15 @@ const styles = StyleSheet.create({
   inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#171E2C', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   input: { flex: 1, color: '#ffffff', fontSize: 16, paddingVertical: 10 },
   modalOverlay: { backgroundColor: 'rgba(5, 10, 20, 0.95)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
-  modalBox: { backgroundColor: '#1e293b', width: '85%', borderRadius: 16, padding: 24, alignItems: 'center' },
+  modalBox: { backgroundColor: '#1e293b', width: '90%', borderRadius: 16, padding: 24, alignItems: 'center' },
   modalTitle: { color: '#ffffff', fontSize: 20, fontWeight: 'bold', marginBottom: 20 },
-  modelCard: { backgroundColor: '#0f172a', width: '100%', borderRadius: 12, padding: 16, marginBottom: 12, alignItems: 'center' },
-  modelNameText: { color: '#94a3b8', fontSize: 14, marginBottom: 12, textAlign: 'center' },
-  downloadBtn: { backgroundColor: '#2563EB', width: '100%', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  modelCard: { backgroundColor: '#0f172a', width: '100%', borderRadius: 12, padding: 16, marginBottom: 12 },
+  modelNameText: { color: '#ffffff', fontSize: 16, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
+  downloadBtn: { backgroundColor: '#2563EB', width: '100%', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 12 },
   downloadBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
+  
+  hardwareBadgeRow: { flexDirection: 'column', gap: 4, alignItems: 'center' },
+  recommendedBadge: { color: '#10b981', fontSize: 12, fontWeight: '600' },
+  tooHeavyBadge: { color: '#ef4444', fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  speedBadge: { color: '#cbd5e1', fontSize: 12, fontStyle: 'italic', textAlign: 'center' },
 });

@@ -213,6 +213,7 @@ import RNFS from 'react-native-fs';
 import { useIsFocused } from '@react-navigation/native';
 import { pick, isCancel } from '@react-native-documents/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DeviceInfo from 'react-native-device-info';
 import { ALL_MODELS, downloadModel } from '../services/ModelService'; 
 import ModelCard from '../components/ModelCard';
 import NerveSparksDrawer from '../components/NerveSparksDrawer';
@@ -227,6 +228,9 @@ export default function ModelsScreen({ navigation }: any) {
   const [progresses, setProgresses] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
   
+  const [deviceRamMB, setDeviceRamMB] = useState<number>(0);
+  const [benchmarks, setBenchmarks] = useState<Record<string, string>>({});
+
   const [loadingModel, setLoadingModel] = useState<string | null>(null);
   const loadingAnim = useRef(new Animated.Value(0)).current;
 
@@ -290,6 +294,16 @@ export default function ModelsScreen({ navigation }: any) {
       // 🔥 FIX: LOAD SAVED DEFAULT MODEL ON STARTUP
       const savedDefault = await AsyncStorage.getItem('DEFAULT_MODEL_NAME');
       if (savedDefault) setDefaultModel(savedDefault);
+
+      // 🔥 Load Hardware Specs
+      try {
+        const totalMemBytes = await DeviceInfo.getTotalMemory();
+        setDeviceRamMB(Math.floor(totalMemBytes / (1024 * 1024)));
+        
+        // Load offline benchmark strings
+        const savedBenchmarksRaw = await AsyncStorage.getItem('MODEL_BENCHMARKS');
+        if (savedBenchmarksRaw) setBenchmarks(JSON.parse(savedBenchmarksRaw));
+      } catch (e) { console.log(e); }
 
     } catch(e) { console.log(e); }
   };
@@ -365,18 +379,25 @@ export default function ModelsScreen({ navigation }: any) {
 
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <Text style={styles.sectionHeader}>Suggested Models</Text>
-          {filteredSuggested.map((model, index) => (
-            <ModelCard
-              key={index} modelName={model.name} isActive={activeModel === model.name} isDefault={defaultModel === model.name}
-              isDownloaded={fileStates[model.name]?.exists || false} isDownloading={downloading[model.name]} 
-              downloadProgress={progresses[model.name]} fileSizeStr={fileStates[model.name]?.size || '0 Bytes'}
-              showDeleteButton={true} onDownload={() => handleDownload(model)} 
-              onCancelDownload={() => cancelDownload(model)} 
-              onSetDefault={() => handleSetDefault(model.name)} // 🔥 UPDATED HERE
-              onLoad={() => handleLoadModel(model.name)}
-              onDelete={async () => { await RNFS.unlink(`${RNFS.DocumentDirectoryPath}/${model.destination}`); checkFiles(); }}
-            />
-          ))}
+          {filteredSuggested.map((model, index) => {
+            const isTooHeavy = !!model.minRamMB && model.minRamMB > deviceRamMB;
+            const isRecommended = !!model.minRamMB && model.minRamMB <= deviceRamMB;
+            return (
+              <ModelCard
+                key={index} modelName={model.name} isActive={activeModel === model.name} isDefault={defaultModel === model.name}
+                isDownloaded={fileStates[model.name]?.exists || false} isDownloading={downloading[model.name]} 
+                downloadProgress={progresses[model.name]} fileSizeStr={fileStates[model.name]?.size || '0 Bytes'}
+                showDeleteButton={true} onDownload={() => handleDownload(model)} 
+                onCancelDownload={() => cancelDownload(model)} 
+                onSetDefault={() => handleSetDefault(model.name)} 
+                onLoad={() => handleLoadModel(model.name)}
+                onDelete={async () => { await RNFS.unlink(`${RNFS.DocumentDirectoryPath}/${model.destination}`); checkFiles(); }}
+                isRecommended={isRecommended}
+                isTooHeavy={isTooHeavy}
+                expectedSpeed={benchmarks[model.name] || model.expectedSpeed}
+              />
+            );
+          })}
           
           <View style={[styles.divider, { marginVertical: 20 }]} />
 
@@ -385,18 +406,25 @@ export default function ModelsScreen({ navigation }: any) {
             <Text style={styles.emptyText}>No models found</Text>
           ) : (
             <>
-              {filteredMyModels.map((model, index) => (
-                <ModelCard
-                  key={`my-${index}`} modelName={model.name} isActive={activeModel === model.name} isDefault={defaultModel === model.name}
-                  isDownloaded={fileStates[model.name]?.exists || false} isDownloading={downloading[model.name]} 
-                  downloadProgress={progresses[model.name]} fileSizeStr={fileStates[model.name]?.size || '0 Bytes'}
-                  showDeleteButton={true} onDownload={() => handleDownload(model)} 
-                  onCancelDownload={() => cancelDownload(model)} 
-                  onSetDefault={() => handleSetDefault(model.name)} // 🔥 UPDATED HERE
-                  onLoad={() => handleLoadModel(model.name)}
-                  onDelete={async () => { await RNFS.unlink(`${RNFS.DocumentDirectoryPath}/${model.destination}`); checkFiles(); }}
-                />
-              ))}
+              {filteredMyModels.map((model, index) => {
+                const isTooHeavy = !!model.minRamMB && model.minRamMB > deviceRamMB;
+                const isRecommended = !!model.minRamMB && model.minRamMB <= deviceRamMB;
+                return (
+                  <ModelCard
+                    key={`my-${index}`} modelName={model.name} isActive={activeModel === model.name} isDefault={defaultModel === model.name}
+                    isDownloaded={fileStates[model.name]?.exists || false} isDownloading={downloading[model.name]} 
+                    downloadProgress={progresses[model.name]} fileSizeStr={fileStates[model.name]?.size || '0 Bytes'}
+                    showDeleteButton={true} onDownload={() => handleDownload(model)} 
+                    onCancelDownload={() => cancelDownload(model)} 
+                    onSetDefault={() => handleSetDefault(model.name)} 
+                    onLoad={() => handleLoadModel(model.name)}
+                    onDelete={async () => { await RNFS.unlink(`${RNFS.DocumentDirectoryPath}/${model.destination}`); checkFiles(); }}
+                    isRecommended={isRecommended}
+                    isTooHeavy={isTooHeavy}
+                    expectedSpeed={benchmarks[model.name] || model.expectedSpeed}
+                  />
+                );
+              })}
               {filteredCustom.map((filename, index) => (
                 <ModelCard
                   key={`custom-${index}`} modelName={filename} isActive={activeModel === filename} isDefault={defaultModel === filename}

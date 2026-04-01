@@ -168,10 +168,13 @@ interface ModelCardProps {
   onDelete: () => void;
   onSetDefault: () => void;
   onLoad?: () => void; 
+  isRecommended?: boolean;
+  isTooHeavy?: boolean;
+  expectedSpeed?: string;
 }
 
 export default function ModelCard({
-  modelName, isActive, isDefault, isDownloaded, isDownloading, downloadProgress, fileSizeStr, showDeleteButton, onDownload, onCancelDownload, onDelete, onSetDefault, onLoad
+  modelName, isActive, isDefault, isDownloaded, isDownloading, downloadProgress, fileSizeStr, showDeleteButton, onDownload, onCancelDownload, onDelete, onSetDefault, onLoad, isRecommended, isTooHeavy, expectedSpeed
 }: ModelCardProps) {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
 
@@ -180,7 +183,14 @@ export default function ModelCard({
       
       {isActive && <Text style={styles.activeText}>Active Model</Text>}
 
-      <Text style={styles.modelName} numberOfLines={1} ellipsizeMode="middle">{modelName}</Text>
+      <Text style={[styles.modelName, isTooHeavy && { color: '#ef4444' }]} numberOfLines={1} ellipsizeMode="middle">{modelName}</Text>
+      
+      {/* Hardware Recommendations & Speeds */}
+      <View style={styles.hardwareBadgeRow}>
+        {isRecommended && <Text style={styles.recommendedBadge}>✓ Recommended for your device</Text>}
+        {isTooHeavy && <Text style={styles.tooHeavyBadge}>⚠️ May crash (Requires more RAM)</Text>}
+        {expectedSpeed && <Text style={styles.speedBadge}>⚡ Est. Speed: {expectedSpeed}</Text>}
+      </View>
 
       {/* 🔥 ACTION ROW: Load on left, Delete on right */}
       <View style={styles.actionRow}>
@@ -247,7 +257,12 @@ export default function ModelCard({
 const styles = StyleSheet.create({
   card: { backgroundColor: '#0f172a', padding: 16, borderRadius: 12, marginVertical: 6, elevation: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   activeText: { color: '#10b981', fontSize: 12, fontWeight: 'bold', marginBottom: 4 },
-  modelName: { color: '#ffffff', fontSize: 18, fontWeight: '600', marginBottom: 16 },
+  modelName: { color: '#ffffff', fontSize: 18, fontWeight: '600', marginBottom: 6 },
+  
+  hardwareBadgeRow: { flexDirection: 'column', gap: 4, marginBottom: 16 },
+  recommendedBadge: { color: '#10b981', fontSize: 12, fontWeight: '600' },
+  tooHeavyBadge: { color: '#ef4444', fontSize: 12, fontWeight: '600' },
+  speedBadge: { color: '#cbd5e1', fontSize: 12, fontStyle: 'italic' },
   
   actionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   btn: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 24, minWidth: 100, alignItems: 'center', justifyContent: 'center' },

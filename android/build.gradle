@@ -19,3 +19,17 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+// Redirect jcenter (shut down 2022) to mavenCentral for all subprojects
+allprojects {
+    configurations.all {
+        resolutionStrategy {
+            // Force all resolution to go through our repos
+        }
+    }
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "https://jitpack.io" }
+    }
+}
