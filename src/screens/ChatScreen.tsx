@@ -84,7 +84,7 @@ const PROMPTS = [
 ];
 
 export default function ChatScreen({ navigation }: any) {
-  const { isIncognito, disableIncognito } = useIncognito();
+  const { isIncognito, toggleIncognito, disableIncognito } = useIncognito();
   const hasVoiceNativeModule = !!NativeModules.Voice;
 
   const [inputText, setInputText] = useState('');
@@ -567,6 +567,21 @@ export default function ChatScreen({ navigation }: any) {
     );
   };
 
+  const handleToggleIncognito = async () => {
+    if (isGenerating) {
+      ToastAndroid.show('Wait for the current response to finish first.', ToastAndroid.SHORT);
+      return;
+    }
+    if (isListening) await Voice.stop();
+    await stopSpeaking();
+    Keyboard.dismiss();
+    pendingFolderId.current = null;
+    activeConversationId.current = null;
+    setMessages([]);
+    setInputText('');
+    toggleIncognito();
+  };
+
   const handleDownload = async (model: IrisModel) => {
     setDownloading(prev => ({ ...prev, [model.name]: true }));
     try {
@@ -794,6 +809,18 @@ export default function ChatScreen({ navigation }: any) {
           </View>
         </View>
 
+        {/* ── Incognito banner ── tap to toggle incognito mode */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={[styles.incognitoBanner, isIncognito && styles.incognitoBannerActive]}
+          onPress={handleToggleIncognito}
+        >
+          <Text style={styles.incognitoIcon}>{isIncognito ? '●' : '○'}</Text>
+          <Text style={styles.incognitoText}>
+            {isIncognito ? 'Incognito on: this chat stays temporary' : 'Incognito off: tap for temporary chat'}
+          </Text>
+        </TouchableOpacity>
+
         {messages.length === 0 ? (
           <View style={styles.emptyChatContainer}>
             <Text style={styles.helloText}>Hello, Ask me Anything</Text>
@@ -963,7 +990,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(88,28,135,0.35)',
     borderWidth: 1, borderColor: 'rgba(167,139,250,0.3)',
     marginHorizontal: 12, borderRadius: 10, gap: 6,
-    paddingHorizontal: 12,
+    marginBottom: 10, paddingHorizontal: 12, paddingVertical: 10,
+  },
+  incognitoBannerActive: {
+    backgroundColor: 'rgba(88,28,135,0.55)',
+    borderColor: 'rgba(196,181,253,0.6)',
   },
   engineBanner: {
     marginHorizontal: 16,

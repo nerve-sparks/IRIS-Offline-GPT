@@ -5,7 +5,7 @@
 import React, { useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet,
-  Dimensions, TouchableWithoutFeedback, TextInput,
+  Animated, Dimensions, TouchableWithoutFeedback, TextInput,
   StatusBar, Alert, Modal, ScrollView, Linking, Image, Share, Switch,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
@@ -15,6 +15,7 @@ import {
   togglePin, moveToFolder, createFolder, exportConversation,
   Conversation,
 } from '../services/conversationStore';
+import { useIncognito } from '../services/incognitoContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = SCREEN_WIDTH * 0.82;
@@ -45,6 +46,7 @@ export default function IrisSidebar({
   visible, onClose, onSelectConversation, onNewChat,
   activeModelName = 'No active model',
 }: Props) {
+  const { isIncognito, toggleIncognito } = useIncognito();
   const conversations = useConversations();
   const folders = useFolders();
 
@@ -57,9 +59,41 @@ export default function IrisSidebar({
   const [newFolderName, setNewFolderName] = React.useState('');
   const [selectedColor, setSelectedColor] = React.useState(FOLDER_COLORS[0]);
 
+  const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
+  const overlayAnim = useRef(new Animated.Value(0)).current;
+  // Holds the currently running animation so we can stop it before starting a new one
+  const animRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  // ── Change 1 + 2: safe animated open/close with stop-before-start ──────────
   useEffect(() => {
-    setIsMounted(visible);
+    if (visible) {
+      setIsMounted(true);
+      animRef.current?.stop();
+      animRef.current = Animated.parallel([
+        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }),
+        Animated.timing(overlayAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+      ]);
+      animRef.current.start();
+    } else {
+      animRef.current?.stop();
+      animRef.current = Animated.parallel([
+        Animated.spring(slideAnim, { toValue: -DRAWER_WIDTH, useNativeDriver: true, tension: 65, friction: 11 }),
+        Animated.timing(overlayAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]);
+      // ── Change 3: use !visible closure instead of `finished` flag ──────────
+      // This fires even if the animation was interrupted (e.g. rapid toggle)
+      animRef.current.start(() => { if (!visible) setIsMounted(false); });
+    }
   }, [visible]);
+
+  // ── Change 2: stop all animations when component fully unmounts ─────────────
+  useEffect(() => {
+    return () => {
+      animRef.current?.stop();
+      slideAnim.stopAnimation();
+      overlayAnim.stopAnimation();
+    };
+  }, []);
 
   // Filter conversations
   const filtered = React.useMemo(() => {
@@ -136,13 +170,13 @@ export default function IrisSidebar({
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
 
-      {/* Dim overlay */}
+      {/* Dim overlay — fades in/out */}
       <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay} />
+        <Animated.View style={[styles.overlay, { opacity: overlayAnim }]} />
       </TouchableWithoutFeedback>
 
-      {/* Sidebar drawer */}
-      <View style={styles.drawer}>
+      {/* Sidebar drawer — slides in/out */}
+      <Animated.View style={[styles.drawer, { transform: [{ translateX: slideAnim }] }]}>
 
         {/* ── HEADER — Brand (company's NerveSparks brand) ── */}
         <LinearGradient
@@ -284,6 +318,32 @@ export default function IrisSidebar({
 
         {/* ── FOOTER — NerveSparks links (company's original content) ── */}
         <View style={styles.footer}>
+
+          {/* ── Incognito Mode Toggle ── */}
+          <TouchableOpacity
+            style={[styles.incognitoRow, isIncognito && styles.incognitoRowActive]}
+            onPress={toggleIncognito}
+            activeOpacity={0.8}
+          >
+            <View style={styles.incognitoLeft}>
+              <Text style={styles.incognitoIcon}>🕶️</Text>
+              <View>
+                <Text style={[styles.incognitoLabel, isIncognito && styles.incognitoLabelActive]}>
+                  Incognito Mode
+                </Text>
+                {isIncognito && (
+                  <Text style={styles.incognitoSub}>Chat won&apos;t be saved</Text>
+                )}
+              </View>
+            </View>
+            <Switch
+              value={isIncognito}
+              onValueChange={toggleIncognito}
+              trackColor={{ false: '#2d3748', true: '#7C3AED' }}
+              thumbColor={isIncognito ? '#c4b5fd' : '#6b7280'}
+            />
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.footerBtn}
             onPress={() => Linking.openURL('https://github.com/nerve-sparks/iris_android')}
@@ -299,7 +359,7 @@ export default function IrisSidebar({
           </TouchableOpacity>
           <Text style={styles.poweredBy}>powered by llama.cpp</Text>
         </View>
-      </View>
+      </Animated.View>
 
       {/* ── New Folder Modal ── */}
       <Modal visible={showFolderModal} transparent animationType="fade">
@@ -468,6 +528,22 @@ const styles = StyleSheet.create({
   footerBtnText: { color: '#e2e8f0', fontSize: 14, fontWeight: '500' },
   githubIcon: { width: 18, height: 18, marginLeft: 8, resizeMode: 'contain' },
   poweredBy: { color: '#4a5568', textAlign: 'center', fontSize: 11, marginTop: 4 },
+
+  // Incognito toggle
+  incognitoRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#1a2233', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10,
+    borderWidth: 1, borderColor: '#2d3748',
+  },
+  incognitoRowActive: {
+    borderColor: '#7C3AED', backgroundColor: 'rgba(124,58,237,0.12)',
+  },
+  incognitoLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  incognitoIcon: { fontSize: 20 },
+  incognitoLabel: { color: '#6b7280', fontSize: 13, fontWeight: '600' },
+  incognitoLabelActive: { color: '#c4b5fd' },
+  incognitoSub: { color: '#7C3AED', fontSize: 11, marginTop: 1 },
 
   // New Folder Modal
   modalOverlay: {
