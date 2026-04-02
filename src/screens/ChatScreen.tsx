@@ -1,4 +1,3 @@
-
 // import React, { useState, useEffect, useRef } from 'react';
 // import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Image, ToastAndroid, Dimensions, Alert, TouchableWithoutFeedback } from 'react-native';
 // import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +9,7 @@
 // import LinearGradient from 'react-native-linear-gradient';
 // import AsyncStorage from '@react-native-async-storage/async-storage';
 // import Markdown from 'react-native-markdown-display';
+// import Clipboard from '@react-native-clipboard/clipboard'; // 🔥 ADDED CLIPBOARD
 // import { ALL_MODELS, downloadModel, IrisModel } from '../services/ModelService';
 // import NerveSparksDrawer from '../components/NerveSparksDrawer';
 
@@ -34,11 +34,14 @@
 // ];
 
 // export default function ChatScreen({ navigation }: any) {
-//   const safeTtsStop = () => {
-//     if (Platform.OS === 'android') {
-//       Tts.stop()
+//   const safeTtsStop = () =>{
+//     try{
+//       Tts.stop();
+//     } catch (e){
+//       console.log(e);
 //     }
 //   };
+
 //   const [inputText, setInputText] = useState('');
 //   const [messages, setMessages] = useState<Message[]>([]);
 //   const [needsModel, setNeedsModel] = useState(false);
@@ -53,8 +56,9 @@
 
 //   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 //   const [touchStartX, setTouchStartX] = useState(0);
-//   const [touchStartY, setTouchStartY] =useState(0);
+//   const [touchStartY, setTouchStartY] = useState(0);
 //   const [currentActiveModel, setCurrentActiveModel] = useState("No active model");
+//   const [speakingId, setSpeakingId] = useState<string | null>(null);
   
 //   const isFocused = useIsFocused();
 //   const flatListRef = useRef<FlatList>(null);
@@ -146,10 +150,16 @@
 
 //   useEffect(() => {
 //     Tts.setDefaultLanguage('en-US');
-//     if (Platform.OS ==='android'){
+//     if (Platform.OS === 'android') {
 //       Tts.setDefaultRate(0.5);
 //     }
     
+//     // 🔥 THE FIX: Adding TTS listeners to silence the yellow warnings
+//     const ttsStart = Tts.addEventListener('tts-start', () => {});
+//     const ttsProgress = Tts.addEventListener('tts-progress', () => {});
+//     const ttsFinish = Tts.addEventListener('tts-finish', (event) => {setSpeakingId(null)});
+//     const ttsCancel = Tts.addEventListener('tts-cancel', (event) => {setSpeakingId(null)});
+
 //     Voice.onSpeechStart = () => { setIsListening(true); safeTtsStop(); };
 //     Voice.onSpeechEnd = () => setIsListening(false);
 //     Voice.onSpeechError = () => setIsListening(false);
@@ -157,7 +167,16 @@
 //     Voice.onSpeechResults = (e: SpeechResultsEvent) => { if (e.value && e.value.length > 0) setInputText(e.value[0]); };
 
 //     if (isFocused) loadEngine();
-//     return () => { Voice.destroy().then(Voice.removeAllListeners); safeTtsStop(); };
+    
+//     return () => { 
+//       Voice.destroy().then(Voice.removeAllListeners); 
+//       safeTtsStop(); 
+//       // 🔥 THE FIX: Remove listeners when leaving the screen
+//       ttsStart.remove();
+//       ttsProgress.remove();
+//       ttsFinish.remove();
+//       ttsCancel.remove();
+//     };
 //   }, [isFocused]);
 
 //   const startListening = async () => {
@@ -167,11 +186,13 @@
 
 //   const clearChat = () => {
 //     Keyboard.dismiss();
+    
+//     setSpeakingId(null); 
+//     safeTtsStop(); 
 //     setTimeout(() => {
 //       if (isGenerating && llamaContext) {
 //         try { llamaContext.stopCompletion(); } catch (e) { console.log(e); }
 //       }
-//       safeTtsStop();
 //       setMessages([]);
 //       setInputText(''); 
 //       setIsGenerating(false);
@@ -212,9 +233,41 @@
 //     } catch (e) {}
 //   };
 
+//   // 🔥 NEW FEATURE: Handle Copy
+//   const handleCopyText = (text: string) => {
+//     Clipboard.setString(text);
+//     if (Platform.OS === 'android') {
+//       ToastAndroid.show("Copied to clipboard!", ToastAndroid.SHORT);
+//     }
+//   };
+
+//   // 🔥 NEW FEATURE: Handle Speak
+//   // 🔥 NEW FEATURE: Handle Speak
+//   // 🔥 NEW FEATURE: Handle Speak (FIXED)
+//   // 🔥 NEW FEATURE: Handle Speak (The Final Fix)
+//   const handleSpeakText = (text: string, id: string) => {
+//     // 1. Pehle check karo ki kya hum same message ko rokne aaye hain?
+//     const isStopping = speakingId === id;
+
+//     // 2. Kuch bhi ho, pehle purana audio aur state CLEAN karo
+//     safeTtsStop();
+//     setSpeakingId(null);
+
+//     // 3. Agar user ne naya message play karne ko bola hai (Stop nahi dabaya tha)
+//     if (!isStopping) {
+//       setTimeout(() => {
+//         setSpeakingId(id); // Delay ke baad UI update karo
+//         Tts.speak(text);   // Naya audio play karo
+//       }, 200); // 200ms gap ensures ki purana engine theek se band ho gaya hai
+//     }
+//   };
+
 //   const sendMessage = async (text: string = inputText) => {
 //     if (!text.trim() || isGenerating) return;
 //     if (isListening) await Voice.stop();
+    
+    
+//     setSpeakingId(null);
 //     safeTtsStop();
 
 //     const newUserMsg: Message = { id: Date.now().toString(), text, isUser: true };
@@ -275,27 +328,20 @@
 
 //   const handleTouchStart = (e: any) => {
 //     setTouchStartX(e.nativeEvent.pageX);
-//     setTouchStartY(e.nativeEvent.pageY); // 🔥 Touch ki height record kar rahe hain
+//     setTouchStartY(e.nativeEvent.pageY);
 //   };
 
 //   const handleTouchEnd = (e: any) => {
 //     const screenWidth = Dimensions.get('window').width;
 //     const screenHeight = Dimensions.get('window').height;
     
-//     // 🔥 SAFE ZONE LOGIC: 
-//     // Agar touch screen ke bottom 30% hisse mein (jahan prompts aur chat box hain) shuru hua hai, 
-//     // toh isey yahi rok do (return) taaki FlatList aaram se scroll ho sake.
 //     if (touchStartY > screenHeight * 0.7) {
 //       return; 
 //     }
 
-//     // 1. Check if touch started in the left 30% of the screen
 //     const startedInLeftZone = touchStartX <= (screenWidth * 0.2);
-    
-//     // 2. Calculate rightward swipe distance
 //     const swipeDistance = e.nativeEvent.pageX - touchStartX;
 
-//     // 3. Only open IF started on left edge AND swiped right
 //     if (startedInLeftZone && swipeDistance > 50) {
 //       setIsDrawerOpen(true);
 //     }
@@ -337,7 +383,6 @@
 //               </View>
 //             )}
 
-//             {/* 🔥 UI FIX: Header Aligned like Kotlin App */}
 //             <View style={styles.header}>
 //               <Text style={styles.headerTitle}>Iris</Text>
 //               <View style={styles.headerIcons}>
@@ -358,14 +403,12 @@
 //             </View>
 
 //             {messages.length === 0 ? (
-//               // 🔥 UI FIX: TouchableWithoutFeedback added to dismiss keyboard on outside tap
 //               <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
 //                 <View style={styles.emptyChatContainer}>
                   
 //                   <View style={styles.topSection}>
 //                     <Text style={styles.helloText}>Hello, Ask me{'\n'}Anything</Text>
                     
-//                     {/* 🔥 UI FIX: Proper boxes added to info pills */}
 //                     <View style={styles.infoItemsContainer}>
 //                       {INFO_ITEMS.map((item, index) => (
 //                         <View key={index} style={styles.infoPill}>
@@ -402,18 +445,39 @@
 //             ) : (
 //               <FlatList
 //                 ref={flatListRef} data={messages} keyExtractor={(item) => item.id}
+//                 extraData={speakingId}
 //                 contentContainerStyle={styles.chatContainer}
 //                 keyboardDismissMode="on-drag"
 //                 keyboardShouldPersistTaps="handled"
 //                 onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
 //                 renderItem={({ item }) => (
-//                   <View style={[styles.messageBubble, item.isUser ? styles.userBubble : styles.botBubble]}>
+//                   // 🔥 UI FIX: Switched to independent styles for Bot and User bubbles
+//                   <View style={[styles.messageWrapper, item.isUser ? styles.userBubble : styles.botBubble]}>
 //                     {item.isUser ? (
 //                       <Text style={styles.messageText}>{item.text}</Text>
 //                     ) : (
-//                       <Markdown style={markdownStyles}>
-//                         {item.text}
-//                       </Markdown>
+//                       <View>
+//                         <Markdown style={markdownStyles}>
+//                           {item.text}
+//                         </Markdown>
+                        
+//                         {/* 🔥 NEW FEATURE: Copy and Speak Buttons */}
+//                         {item.text.length > 0 && (
+//                           <View style={styles.botActionRow}>
+//                             <TouchableOpacity onPress={() => handleCopyText(item.text)} style={styles.actionBtn}>
+//                               <Text style={styles.actionBtnText}>📋 Copy</Text>
+//                             </TouchableOpacity>
+//                             <TouchableOpacity 
+//                               onPress={() => handleSpeakText(item.text, item.id)} 
+//                               style={styles.actionBtn}
+//                             >
+//                               <Text style={[styles.actionBtnText, speakingId === item.id && { color: '#ef4444' }]}>
+//                                 {speakingId === item.id ? "🛑 Stop" : "🔊 Speak"}
+//                               </Text>
+//                             </TouchableOpacity>
+//                           </View>
+//                         )}
+//                       </View>
 //                     )}
 //                   </View>
 //                 )}
@@ -464,7 +528,7 @@
 // });
 
 // const styles = StyleSheet.create({
-//   outerWrapper: { flex: 1, backgroundColor: '#050a14' }, // Prevents white flashes
+//   outerWrapper: { flex: 1, backgroundColor: '#050a14' },
 //   container: { flex: 1 },
 //   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 15 },
 //   headerTitle: { color: '#ffffff', fontSize: 28, fontWeight: '600', letterSpacing: 0.5 },
@@ -480,47 +544,56 @@
 //   infoItemsContainer: { width: '100%'}, 
 //   bottomPromptsWrapper: { height: 110, marginBottom: 0 }, 
   
-//   // 🔥 INFO PILLS: Exact Match from Photo
 //   infoPill: { 
 //     flexDirection: 'row', 
 //     alignItems: 'center', 
-//     backgroundColor: '#010825', // <-- The exact rich vibrant navy blue from the photo
+//     backgroundColor: '#010825', 
 //     paddingVertical: 14, 
 //     paddingHorizontal: 16, 
 //     borderRadius: 12, 
 //     marginBottom: 12 
-//     // Border hata diya kyunki photo mein solid premium feel hai
 //   },
 //   infoIconWrapper: { 
 //     width: 24, height: 24, borderRadius: 12, 
-//     backgroundColor: '#ffffff', // <-- Solid white circle
+//     backgroundColor: '#ffffff', 
 //     justifyContent: 'center', alignItems: 'center', marginRight: 14 
 //   },
 //   infoIconText: { 
-//     color: '#1C3270', // <-- Same as pill background to create the "cut-out" effect
+//     color: '#1C3270', 
 //     fontSize: 14, fontWeight: 'bold', fontStyle: 'italic',
-//     marginTop: Platform.OS === 'ios' ? 2 : 0 // slight tweak to center the 'i' perfectly
+//     marginTop: Platform.OS === 'ios' ? 2 : 0 
 //   },
 //   infoText: { 
-//     color: '#ffffff', // <-- Pure white text
+//     color: '#ffffff', 
 //     fontSize: 14, flex: 1, fontWeight: '500' 
 //   },
 
-//   // 🔥 PROMPTS: Super Dark Background
-//   promptsContainer: { paddingHorizontal: 20, gap: 12 },
+//   promptsContainer: { paddingLeft:6 ,paddingRight: 6, gap: 12 },
 //   promptCard: { 
-//     backgroundColor: '#020814',
+//     backgroundColor: '#010825',
 //     width: 200, height: 100, justifyContent: 'center', alignItems: 'center', 
 //     borderRadius: 12, padding: 12, 
-//     borderWidth: 1, borderColor: '#111D36' // <-- Very subtle border so it doesn't look completely invisible
+//     borderWidth: 1, borderColor: '#111D36' 
 //   },
-//   promptText: { color: '#E2E8F0', fontSize: 13, textAlign: 'center' },
+//   promptText: { color: '#ffffff', fontSize: 13, textAlign: 'center' },
   
-//   chatContainer: { padding: 20, flexGrow: 1, justifyContent: 'flex-end' },
-//   messageBubble: { maxWidth: '85%', padding: 14, borderRadius: 18, marginBottom: 12 },
-//   userBubble: { alignSelf: 'flex-end', backgroundColor: '#171E2C', borderBottomRightRadius: 4 },
-//   botBubble: { alignSelf: 'flex-start', backgroundColor: 'transparent' },
+//   // 🔥 CHAT CONTAINER UI FIXES
+//   chatContainer: { paddingHorizontal: 16, paddingBottom: 20, paddingTop: 20, flexGrow: 1, justifyContent: 'flex-end' },
+//   messageWrapper: { marginBottom: 16 }, // Base spacing
+  
+//   // 🔥 USER BUBBLE (Stays on right, has padding)
+//   userBubble: { alignSelf: 'flex-end', backgroundColor: '#171E2C', padding: 14, borderRadius: 18, borderBottomRightRadius: 4, maxWidth: '85%' },
+  
+//   // 🔥 BOT BUBBLE (Extreme left, NO padding to push it away from edge)
+//   botBubble: { alignSelf: 'flex-start', backgroundColor: 'transparent', maxWidth: '95%' },
+  
 //   messageText: { color: '#E2E8F0', fontSize: 16, lineHeight: 24 },
+  
+//   // 🔥 NEW ACTION BUTTONS STYLES
+//   botActionRow: { flexDirection: 'row', marginTop: 12, gap: 12 },
+//   actionBtn: { paddingVertical: 6, paddingHorizontal: 14, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 20, flexDirection: 'row', alignItems: 'center' },
+//   actionBtnText: { color: '#cbd5e1', fontSize: 13, fontWeight: '600' },
+
 //   inputAreaWrapper: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 24 : 16 },
 //   inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#21314A', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
 //   input: { flex: 1, color: '#ffffff', fontSize: 16, paddingVertical: 10 },
@@ -534,9 +607,6 @@
 // });
 
 
-
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Image, ToastAndroid, Dimensions, Alert, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -548,7 +618,8 @@ import Tts from 'react-native-tts';
 import LinearGradient from 'react-native-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Markdown from 'react-native-markdown-display';
-import Clipboard from '@react-native-clipboard/clipboard'; // 🔥 ADDED CLIPBOARD
+import Clipboard from '@react-native-clipboard/clipboard';
+import Svg, { Path } from 'react-native-svg'; // 🔥 ADDED SVG IMPORTS
 import { ALL_MODELS, downloadModel, IrisModel } from '../services/ModelService';
 import NerveSparksDrawer from '../components/NerveSparksDrawer';
 
@@ -573,10 +644,11 @@ const INFO_ITEMS = [
 ];
 
 export default function ChatScreen({ navigation }: any) {
-  const safeTtsStop = () =>{
-    try{
-      Tts.stop();
-    } catch (e){
+  // 🔥 BULLETPROOF TTS STOP (WITH iOS FIX)
+  const safeTtsStop = () => {
+    try {
+      Tts.stop(false); // iOS false parameter fix
+    } catch (e) {
       console.log(e);
     }
   };
@@ -693,11 +765,14 @@ export default function ChatScreen({ navigation }: any) {
       Tts.setDefaultRate(0.5);
     }
     
-    // 🔥 THE FIX: Adding TTS listeners to silence the yellow warnings
-    const ttsStart = Tts.addEventListener('tts-start', () => {});
-    const ttsProgress = Tts.addEventListener('tts-progress', () => {});
-    const ttsFinish = Tts.addEventListener('tts-finish', (event) => {setSpeakingId(null)});
-    const ttsCancel = Tts.addEventListener('tts-cancel', (event) => {setSpeakingId(null)});
+    // 🔥 TTS LISTENERS
+    const onStart = () => {};
+    const onFinish = () => setSpeakingId(null);
+    const onCancel = () => setSpeakingId(null);
+
+    Tts.addEventListener('tts-start', onStart);
+    Tts.addEventListener('tts-finish', onFinish);
+    Tts.addEventListener('tts-cancel', onCancel);
 
     Voice.onSpeechStart = () => { setIsListening(true); safeTtsStop(); };
     Voice.onSpeechEnd = () => setIsListening(false);
@@ -710,11 +785,14 @@ export default function ChatScreen({ navigation }: any) {
     return () => { 
       Voice.destroy().then(Voice.removeAllListeners); 
       safeTtsStop(); 
-      // 🔥 THE FIX: Remove listeners when leaving the screen
-      ttsStart.remove();
-      ttsProgress.remove();
-      ttsFinish.remove();
-      ttsCancel.remove();
+      // 🔥 SAFE CLEANUP
+      try {
+        Tts.removeAllListeners('tts-start');
+        Tts.removeAllListeners('tts-finish');
+        Tts.removeAllListeners('tts-cancel');
+      } catch (e) {
+        console.log(e);
+      }
     };
   }, [isFocused]);
 
@@ -772,39 +850,34 @@ export default function ChatScreen({ navigation }: any) {
     } catch (e) {}
   };
 
-  // 🔥 NEW FEATURE: Handle Copy
+  // 🔥 CROSS-PLATFORM COPY TOAST
   const handleCopyText = (text: string) => {
     Clipboard.setString(text);
     if (Platform.OS === 'android') {
-      ToastAndroid.show("Copied to clipboard!", ToastAndroid.SHORT);
+      ToastAndroid.show("Text Copied!", ToastAndroid.SHORT);
+    } else {
+      Alert.alert("Copied", "Text copied to clipboard");
     }
   };
 
-  // 🔥 NEW FEATURE: Handle Speak
-  // 🔥 NEW FEATURE: Handle Speak
-  // 🔥 NEW FEATURE: Handle Speak (FIXED)
-  // 🔥 NEW FEATURE: Handle Speak (The Final Fix)
+  // 🔥 THE PERFECT TOGGLE LOGIC
   const handleSpeakText = (text: string, id: string) => {
-    // 1. Pehle check karo ki kya hum same message ko rokne aaye hain?
     const isStopping = speakingId === id;
-
-    // 2. Kuch bhi ho, pehle purana audio aur state CLEAN karo
+    
     safeTtsStop();
     setSpeakingId(null);
 
-    // 3. Agar user ne naya message play karne ko bola hai (Stop nahi dabaya tha)
     if (!isStopping) {
       setTimeout(() => {
-        setSpeakingId(id); // Delay ke baad UI update karo
-        Tts.speak(text);   // Naya audio play karo
-      }, 200); // 200ms gap ensures ki purana engine theek se band ho gaya hai
+        setSpeakingId(id); 
+        Tts.speak(text);   
+      }, 100); 
     }
   };
 
   const sendMessage = async (text: string = inputText) => {
     if (!text.trim() || isGenerating) return;
     if (isListening) await Voice.stop();
-    
     
     setSpeakingId(null);
     safeTtsStop();
@@ -990,7 +1063,6 @@ export default function ChatScreen({ navigation }: any) {
                 keyboardShouldPersistTaps="handled"
                 onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
                 renderItem={({ item }) => (
-                  // 🔥 UI FIX: Switched to independent styles for Bot and User bubbles
                   <View style={[styles.messageWrapper, item.isUser ? styles.userBubble : styles.botBubble]}>
                     {item.isUser ? (
                       <Text style={styles.messageText}>{item.text}</Text>
@@ -1000,19 +1072,33 @@ export default function ChatScreen({ navigation }: any) {
                           {item.text}
                         </Markdown>
                         
-                        {/* 🔥 NEW FEATURE: Copy and Speak Buttons */}
+                        {/* 🔥 ICONS IMPLEMENTED HERE */}
                         {item.text.length > 0 && (
                           <View style={styles.botActionRow}>
+                            {/* Copy Icon Button */}
                             <TouchableOpacity onPress={() => handleCopyText(item.text)} style={styles.actionBtn}>
-                              <Text style={styles.actionBtnText}>📋 Copy</Text>
+                              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                                <Path stroke="#cbd5e1" strokeLinecap="round" strokeWidth={1.5} d="M20.998 10c-.012-2.175-.108-3.353-.877-4.121C19.243 5 17.828 5 15 5h-3c-2.828 0-4.243 0-5.121.879C6 6.757 6 8.172 6 11v5c0 2.828 0 4.243.879 5.121C7.757 22 9.172 22 12 22h3c2.828 0 4.243 0 5.121-.879C21 20.243 21 18.828 21 16v-1" />
+                                <Path stroke="#cbd5e1" strokeLinecap="round" strokeWidth={1.5} d="M3 10v6a3 3 0 0 0 3 3M18 5a3 3 0 0 0-3-3h-4C7.229 2 5.343 2 4.172 3.172 3.518 3.825 3.229 4.7 3.102 6" />
+                              </Svg>
                             </TouchableOpacity>
+                            
+                            {/* Speak/Stop Icon Button */}
                             <TouchableOpacity 
                               onPress={() => handleSpeakText(item.text, item.id)} 
                               style={styles.actionBtn}
                             >
-                              <Text style={[styles.actionBtnText, speakingId === item.id && { color: '#ef4444' }]}>
-                                {speakingId === item.id ? "🛑 Stop" : "🔊 Speak"}
-                              </Text>
+                              {speakingId === item.id ? (
+                                // STOP ICON
+                                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                                  <Path fill="#ef4444" fillRule="evenodd" d="M12 1.5a10.5 10.5 0 1 0 0 21 10.5 10.5 0 0 0 0-21ZM9 8.25a.75.75 0 0 0-.75.75v6a.75.75 0 0 0 .75.75h6a.75.75 0 0 0 .75-.75V9a.75.75 0 0 0-.75-.75H9Z" clipRule="evenodd" />
+                                </Svg>
+                              ) : (
+                                // SPEAKER ICON
+                                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                                  <Path fill="#cbd5e1" d="M12.914 4.5 8.414 9h-4.5v6h4.5l4.5 4.5v-15Zm2.412 1.297-.218.815A5.574 5.574 0 0 1 19.242 12a5.574 5.574 0 0 1-4.134 5.388l.218.815A6.426 6.426 0 0 0 20.086 12a6.425 6.425 0 0 0-4.76-6.203Zm-.582 2.173-.219.815A3.324 3.324 0 0 1 16.992 12a3.325 3.325 0 0 1-2.467 3.215l.219.815A4.176 4.176 0 0 0 17.836 12a4.176 4.176 0 0 0-3.092-4.03Zm-.582 2.174-.219.815c.473.127.8.551.8 1.041 0 .49-.327.915-.8 1.041l.219.815A1.925 1.925 0 0 0 15.585 12c0-.868-.586-1.632-1.425-1.856Z" />
+                                </Svg>
+                              )}
                             </TouchableOpacity>
                           </View>
                         )}
@@ -1116,22 +1202,16 @@ const styles = StyleSheet.create({
   },
   promptText: { color: '#ffffff', fontSize: 13, textAlign: 'center' },
   
-  // 🔥 CHAT CONTAINER UI FIXES
   chatContainer: { paddingHorizontal: 16, paddingBottom: 20, paddingTop: 20, flexGrow: 1, justifyContent: 'flex-end' },
-  messageWrapper: { marginBottom: 16 }, // Base spacing
+  messageWrapper: { marginBottom: 16 }, 
   
-  // 🔥 USER BUBBLE (Stays on right, has padding)
   userBubble: { alignSelf: 'flex-end', backgroundColor: '#171E2C', padding: 14, borderRadius: 18, borderBottomRightRadius: 4, maxWidth: '85%' },
-  
-  // 🔥 BOT BUBBLE (Extreme left, NO padding to push it away from edge)
   botBubble: { alignSelf: 'flex-start', backgroundColor: 'transparent', maxWidth: '95%' },
   
   messageText: { color: '#E2E8F0', fontSize: 16, lineHeight: 24 },
   
-  // 🔥 NEW ACTION BUTTONS STYLES
   botActionRow: { flexDirection: 'row', marginTop: 12, gap: 12 },
-  actionBtn: { paddingVertical: 6, paddingHorizontal: 14, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 20, flexDirection: 'row', alignItems: 'center' },
-  actionBtnText: { color: '#cbd5e1', fontSize: 13, fontWeight: '600' },
+  actionBtn: { paddingVertical: 8, paddingHorizontal: 12, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
 
   inputAreaWrapper: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 24 : 16 },
   inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#21314A', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },

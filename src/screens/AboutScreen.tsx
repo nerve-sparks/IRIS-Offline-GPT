@@ -73,3 +73,108 @@ const styles = StyleSheet.create({
   faqQ: { color: 'white', fontSize: 16, fontWeight: 'bold' },
   faqA: { color: 'rgba(255,255,255,0.7)', fontSize: 14, marginLeft: 32, marginTop: 4, lineHeight: 20 }
 });
+
+
+// import React, { useState, useEffect } from 'react';
+// import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+// import Tts from 'react-native-tts';
+// import LinearGradient from 'react-native-linear-gradient';
+
+// export default function AboutScreen() {
+//   // 🔥 Sirf ek simple state jo strictly Native Engine control karega
+//   const [isSpeaking, setIsSpeaking] = useState(false);
+
+//   const sampleText = "Hello Arindam bro! This is a test. If I stop when you click the button, that means our isolated logic is 100 percent perfect.";
+
+//   useEffect(() => {
+//     // Setup Engine
+//     Tts.setDefaultLanguage('en-US');
+    
+//     // 🔥 THE NATIVE LISTENERS (Fixed: Removed tts-error)
+//     const onStart = () => setIsSpeaking(true);
+//     const onFinish = () => setIsSpeaking(false);
+//     const onCancel = () => setIsSpeaking(false);
+
+//     // Add Listeners
+//     Tts.addEventListener('tts-start', onStart);
+//     Tts.addEventListener('tts-finish', onFinish);
+//     Tts.addEventListener('tts-cancel', onCancel);
+
+//     // Cleanup on screen exit
+//     return () => {
+//       Tts.stop(false);
+//       try {
+//         Tts.removeAllListeners('tts-start');
+//         Tts.removeAllListeners('tts-finish');
+//         Tts.removeAllListeners('tts-cancel');
+//       } catch (e) {
+//         console.log("Cleanup error:", e);
+//       }
+//     };
+//   }, []);
+
+//   // 🔥 THE TOGGLE LOGIC
+//   const handleToggleSpeech = () => {
+//     if (isSpeaking) {
+//       // Agar bol raha hai, toh force stop
+//       Tts.stop(false); 
+//       // State automatically 'tts-cancel' listener se false ho jayegi
+//     } else {
+//       // Agar chup hai, toh bolna shuru karo
+//       Tts.speak(sampleText);
+//       // State automatically 'tts-start' listener se true ho jayegi
+//     }
+//   };
+
+//   return (
+//     <LinearGradient colors={['#050a14', '#051633']} style={styles.container}>
+//       <SafeAreaView style={styles.content}>
+        
+//         <Text style={styles.title}>TTS Sandbox 🧪</Text>
+        
+//         <View style={styles.card}>
+//           <Text style={styles.textToRead}>{sampleText}</Text>
+//         </View>
+
+//         <TouchableOpacity 
+//           onPress={handleToggleSpeech} 
+//           style={[styles.button, isSpeaking ? styles.buttonStop : styles.buttonStart]}
+//           activeOpacity={0.7}
+//         >
+//           <Text style={styles.buttonText}>
+//             {isSpeaking ? "🛑 STOP READING" : "🔊 START READING"}
+//           </Text>
+//         </TouchableOpacity>
+
+//       </SafeAreaView>
+//     </LinearGradient>
+//   );
+// }
+
+// const styles = StyleSheet.create({
+//   container: { flex: 1 },
+//   content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+//   title: { color: '#ffffff', fontSize: 28, fontWeight: 'bold', marginBottom: 40 },
+//   card: { 
+//     backgroundColor: '#0f172a', 
+//     padding: 20, 
+//     borderRadius: 12, 
+//     borderWidth: 1, 
+//     borderColor: '#333333',
+//     marginBottom: 40 
+//   },
+//   textToRead: { color: '#E2E8F0', fontSize: 18, lineHeight: 28, textAlign: 'center' },
+//   button: { 
+//     paddingVertical: 16, 
+//     paddingHorizontal: 32, 
+//     borderRadius: 30, 
+//     elevation: 5,
+//     shadowColor: '#000',
+//     shadowOffset: { width: 0, height: 2 },
+//     shadowOpacity: 0.25,
+//     shadowRadius: 3.84,
+//   },
+//   buttonStart: { backgroundColor: '#2563EB' }, // Blue
+//   buttonStop: { backgroundColor: '#EF4444' }, // Red
+//   buttonText: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' }
+// });
