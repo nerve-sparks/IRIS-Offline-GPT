@@ -22,6 +22,18 @@ export default function SettingsScreen({ navigation }: any) {
     <View style={styles.iconContainer}>{children}</View>
   );
 
+  // 🔥 NEW: Reusable SVG Arrow Component
+  const RightArrowIcon = () => (
+    <Svg width={12} height={23} viewBox="0 0 12 23" fill="none" style={styles.arrowIconSvg}>
+      <Path 
+        fill="#ffffff" 
+        fillRule="evenodd" 
+        clipRule="evenodd" 
+        d="M8.274 11.95 4.478 15.56l-.949-.902L6.851 11.5 3.529 8.343l.95-.902 3.795 3.608c.126.12.197.282.197.451 0 .17-.071.331-.197.45Z" 
+      />
+    </Svg>
+  );
+
   return (
     <LinearGradient colors={['#050a14', '#051633']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -30,13 +42,12 @@ export default function SettingsScreen({ navigation }: any) {
           {/* MODELS */}
           <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('Models')}>
             <IconWrapper>
-              {/* 🔥 FIX: Numeric width/height, original viewBox */}
               <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
                 <Path fill="#ffffff" d="M18 9V3l-6-3-6 3v6l-6 3v7.5l6 3 6-3 6 3 6-3V12l-6-3Zm-5.865-7.32L16.5 3.84l-3.9 1.95-4.365-2.16 3.9-1.95ZM7.5 4.17 12 6.42v5.4L7.5 9.57v-5.4ZM6 20.82l-4.5-2.25v-5.4L6 15.42v5.4Zm.42-6L2.1 12.63 6 10.68l4.32 2.16-3.9 1.98Zm11.58 6-4.5-2.25v-5.4l4.5 2.25v5.4Zm.42-6-4.32-2.19 3.9-1.95 4.32 2.16-3.9 1.98Z" />
               </Svg>
             </IconWrapper>
             <Text style={styles.rowText}>Models</Text>
-            <Text style={styles.arrowIcon}>{">"}</Text>
+            <RightArrowIcon />
           </TouchableOpacity>
           <View style={styles.divider} />
 
@@ -48,7 +59,7 @@ export default function SettingsScreen({ navigation }: any) {
               </Svg>
             </IconWrapper>
             <Text style={styles.rowText}>Change Parameters</Text>
-            <Text style={styles.arrowIcon}>{">"}</Text>
+            <RightArrowIcon />
           </TouchableOpacity>
           <View style={styles.divider} />
 
@@ -60,7 +71,7 @@ export default function SettingsScreen({ navigation }: any) {
               </Svg>
             </IconWrapper>
             <Text style={styles.rowText}>BenchMark</Text>
-            <Text style={styles.arrowIcon}>{">"}</Text>
+            <RightArrowIcon />
           </TouchableOpacity>
           <View style={styles.divider} />
 
@@ -72,7 +83,7 @@ export default function SettingsScreen({ navigation }: any) {
               </Svg>
             </IconWrapper>
             <Text style={styles.rowText}>About</Text>
-            <Text style={styles.arrowIcon}>{">"}</Text>
+            <RightArrowIcon />
           </TouchableOpacity>
           <View style={styles.divider} />
 
@@ -84,7 +95,7 @@ export default function SettingsScreen({ navigation }: any) {
               </Svg>
             </IconWrapper>
             <Text style={styles.rowText}>Report</Text>
-            <Text style={styles.arrowIcon}>{">"}</Text>
+            <RightArrowIcon />
           </TouchableOpacity>
 
         </View>
@@ -100,6 +111,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 16 },
   iconContainer: { width: 22, height: 22, marginRight: 16, justifyContent: 'center', alignItems: 'center' },
   rowText: { flex: 1, color: '#ffffff', fontSize: 18 },
-  arrowIcon: { fontSize: 20, color: '#ffffff', opacity: 0.5 },
+  
+  // 🔥 FIX: Updated style name for the SVG arrow to keep the 0.5 opacity look
+  arrowIconSvg: { opacity: 0.5 }, 
+  
   divider: { height: 1, backgroundColor: '#333333', marginHorizontal: 16 }
 });

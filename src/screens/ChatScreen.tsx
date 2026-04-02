@@ -573,9 +573,9 @@ const INFO_ITEMS = [
 ];
 
 export default function ChatScreen({ navigation }: any) {
-  const safeTtsStop = async () =>{
+  const safeTtsStop = () =>{
     try{
-      await Tts.stop();
+      Tts.stop();
     } catch (e){
       console.log(e);
     }
@@ -696,8 +696,8 @@ export default function ChatScreen({ navigation }: any) {
     // 🔥 THE FIX: Adding TTS listeners to silence the yellow warnings
     const ttsStart = Tts.addEventListener('tts-start', () => {});
     const ttsProgress = Tts.addEventListener('tts-progress', () => {});
-    const ttsFinish = Tts.addEventListener('tts-finish', () => setSpeakingId(null));
-    const ttsCancel = Tts.addEventListener('tts-cancel', () => setSpeakingId(null));
+    const ttsFinish = Tts.addEventListener('tts-finish', (event) => {setSpeakingId(null)});
+    const ttsCancel = Tts.addEventListener('tts-cancel', (event) => {setSpeakingId(null)});
 
     Voice.onSpeechStart = () => { setIsListening(true); safeTtsStop(); };
     Voice.onSpeechEnd = () => setIsListening(false);
@@ -723,10 +723,11 @@ export default function ChatScreen({ navigation }: any) {
     else { setInputText(''); await Voice.start('en-US'); }
   };
 
-  const clearChat = async () => {
+  const clearChat = () => {
     Keyboard.dismiss();
-    await safeTtsStop(); 
+    
     setSpeakingId(null); 
+    safeTtsStop(); 
     setTimeout(() => {
       if (isGenerating && llamaContext) {
         try { llamaContext.stopCompletion(); } catch (e) { console.log(e); }
@@ -782,29 +783,31 @@ export default function ChatScreen({ navigation }: any) {
   // 🔥 NEW FEATURE: Handle Speak
   // 🔥 NEW FEATURE: Handle Speak
   // 🔥 NEW FEATURE: Handle Speak (FIXED)
-  const handleSpeakText = async (text: string, id: string) => {
-    await safeTtsStop(); 
-    
-    setSpeakingId((prevId) => {
-      if (prevId === id) {
-        // Agar pehle se chal raha hai, toh null set karo (Stop)
-        return null; 
-      } else {
-        // Naya start karo
-        setTimeout(() => {
-          Tts.speak(text);
-        }, 100);
-        return id;
-      }
-    });
+  // 🔥 NEW FEATURE: Handle Speak (The Final Fix)
+  const handleSpeakText = (text: string, id: string) => {
+    // 1. Pehle check karo ki kya hum same message ko rokne aaye hain?
+    const isStopping = speakingId === id;
+
+    // 2. Kuch bhi ho, pehle purana audio aur state CLEAN karo
+    safeTtsStop();
+    setSpeakingId(null);
+
+    // 3. Agar user ne naya message play karne ko bola hai (Stop nahi dabaya tha)
+    if (!isStopping) {
+      setTimeout(() => {
+        setSpeakingId(id); // Delay ke baad UI update karo
+        Tts.speak(text);   // Naya audio play karo
+      }, 200); // 200ms gap ensures ki purana engine theek se band ho gaya hai
+    }
   };
 
   const sendMessage = async (text: string = inputText) => {
     if (!text.trim() || isGenerating) return;
     if (isListening) await Voice.stop();
     
-    safeTtsStop();
+    
     setSpeakingId(null);
+    safeTtsStop();
 
     const newUserMsg: Message = { id: Date.now().toString(), text, isUser: true };
     const botMsgId = (Date.now() + 1).toString();
@@ -1104,14 +1107,14 @@ const styles = StyleSheet.create({
     fontSize: 14, flex: 1, fontWeight: '500' 
   },
 
-  promptsContainer: { paddingHorizontal: 20, gap: 12 },
+  promptsContainer: { paddingLeft:6 ,paddingRight: 6, gap: 12 },
   promptCard: { 
-    backgroundColor: '#020814',
+    backgroundColor: '#010825',
     width: 200, height: 100, justifyContent: 'center', alignItems: 'center', 
     borderRadius: 12, padding: 12, 
     borderWidth: 1, borderColor: '#111D36' 
   },
-  promptText: { color: '#E2E8F0', fontSize: 13, textAlign: 'center' },
+  promptText: { color: '#ffffff', fontSize: 13, textAlign: 'center' },
   
   // 🔥 CHAT CONTAINER UI FIXES
   chatContainer: { paddingHorizontal: 16, paddingBottom: 20, paddingTop: 20, flexGrow: 1, justifyContent: 'flex-end' },

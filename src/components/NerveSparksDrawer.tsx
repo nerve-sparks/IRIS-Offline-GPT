@@ -45,7 +45,7 @@ export default function NerveSparksDrawer({ visible, onClose, activeModelName = 
                   />
                   <View>
                     <Text style={styles.brandTitle}>Iris</Text>
-                    <Text style={styles.brandSubtitle}>NerveSparks</Text>
+                    <Text style={styles.brandSubtitle}>Nervesparks</Text>
                   </View>
                 </View>
                 <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
