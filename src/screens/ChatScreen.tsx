@@ -573,11 +573,14 @@ const INFO_ITEMS = [
 ];
 
 export default function ChatScreen({ navigation }: any) {
-  const safeTtsStop = () => {
-    if (Platform.OS === 'android') {
-      Tts.stop()
+  const safeTtsStop = async () =>{
+    try{
+      await Tts.stop();
+    } catch (e){
+      console.log(e);
     }
   };
+
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [needsModel, setNeedsModel] = useState(false);
@@ -594,6 +597,7 @@ export default function ChatScreen({ navigation }: any) {
   const [touchStartX, setTouchStartX] = useState(0);
   const [touchStartY, setTouchStartY] = useState(0);
   const [currentActiveModel, setCurrentActiveModel] = useState("No active model");
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
   
   const isFocused = useIsFocused();
   const flatListRef = useRef<FlatList>(null);
@@ -692,8 +696,8 @@ export default function ChatScreen({ navigation }: any) {
     // 🔥 THE FIX: Adding TTS listeners to silence the yellow warnings
     const ttsStart = Tts.addEventListener('tts-start', () => {});
     const ttsProgress = Tts.addEventListener('tts-progress', () => {});
-    const ttsFinish = Tts.addEventListener('tts-finish', () => {});
-    const ttsCancel = Tts.addEventListener('tts-cancel', () => {});
+    const ttsFinish = Tts.addEventListener('tts-finish', () => setSpeakingId(null));
+    const ttsCancel = Tts.addEventListener('tts-cancel', () => setSpeakingId(null));
 
     Voice.onSpeechStart = () => { setIsListening(true); safeTtsStop(); };
     Voice.onSpeechEnd = () => setIsListening(false);
@@ -719,13 +723,14 @@ export default function ChatScreen({ navigation }: any) {
     else { setInputText(''); await Voice.start('en-US'); }
   };
 
-  const clearChat = () => {
+  const clearChat = async () => {
     Keyboard.dismiss();
+    await safeTtsStop(); 
+    setSpeakingId(null); 
     setTimeout(() => {
       if (isGenerating && llamaContext) {
         try { llamaContext.stopCompletion(); } catch (e) { console.log(e); }
       }
-      safeTtsStop();
       setMessages([]);
       setInputText(''); 
       setIsGenerating(false);
@@ -775,15 +780,31 @@ export default function ChatScreen({ navigation }: any) {
   };
 
   // 🔥 NEW FEATURE: Handle Speak
-  const handleSpeakText = (text: string) => {
-    safeTtsStop(); // Stop any current speech
-    Tts.speak(text); // Start reading the new text
+  // 🔥 NEW FEATURE: Handle Speak
+  // 🔥 NEW FEATURE: Handle Speak (FIXED)
+  const handleSpeakText = async (text: string, id: string) => {
+    await safeTtsStop(); 
+    
+    setSpeakingId((prevId) => {
+      if (prevId === id) {
+        // Agar pehle se chal raha hai, toh null set karo (Stop)
+        return null; 
+      } else {
+        // Naya start karo
+        setTimeout(() => {
+          Tts.speak(text);
+        }, 100);
+        return id;
+      }
+    });
   };
 
   const sendMessage = async (text: string = inputText) => {
     if (!text.trim() || isGenerating) return;
     if (isListening) await Voice.stop();
+    
     safeTtsStop();
+    setSpeakingId(null);
 
     const newUserMsg: Message = { id: Date.now().toString(), text, isUser: true };
     const botMsgId = (Date.now() + 1).toString();
@@ -960,6 +981,7 @@ export default function ChatScreen({ navigation }: any) {
             ) : (
               <FlatList
                 ref={flatListRef} data={messages} keyExtractor={(item) => item.id}
+                extraData={speakingId}
                 contentContainerStyle={styles.chatContainer}
                 keyboardDismissMode="on-drag"
                 keyboardShouldPersistTaps="handled"
@@ -981,8 +1003,13 @@ export default function ChatScreen({ navigation }: any) {
                             <TouchableOpacity onPress={() => handleCopyText(item.text)} style={styles.actionBtn}>
                               <Text style={styles.actionBtnText}>📋 Copy</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleSpeakText(item.text)} style={styles.actionBtn}>
-                              <Text style={styles.actionBtnText}>🔊 Speak</Text>
+                            <TouchableOpacity 
+                              onPress={() => handleSpeakText(item.text, item.id)} 
+                              style={styles.actionBtn}
+                            >
+                              <Text style={[styles.actionBtnText, speakingId === item.id && { color: '#ef4444' }]}>
+                                {speakingId === item.id ? "🛑 Stop" : "🔊 Speak"}
+                              </Text>
                             </TouchableOpacity>
                           </View>
                         )}
