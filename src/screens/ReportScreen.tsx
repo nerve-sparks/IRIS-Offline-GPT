@@ -12,7 +12,6 @@ import {
   ActivityIndicator,
   ScrollView
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
 
@@ -53,88 +52,61 @@ export default function ReportScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <LinearGradient
-        colors={['#050a14', '#051633']}
+    <LinearGradient
+      colors={['#050a14', '#051633']}
+      style={styles.container}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.container}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.container}
+        <ScrollView 
+          contentContainerStyle={styles.scrollGrow}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <ScrollView 
-            contentContainerStyle={styles.scrollGrow}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+          
+          <Text style={styles.subText}>
+            Found a bug or facing a UI issue? Let us know so we can fix it for you.
+          </Text>
+
+          {/* --- TEXT INPUT AREA --- */}
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Describe your issue in detail here..."
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              value={reportText}
+              onChangeText={setReportText}
+              multiline={true}
+              textAlignVertical="top" 
+              editable={!isSubmitting}
+            />
+          </View>
+
+          {/* --- SUBMIT BUTTON --- */}
+          <TouchableOpacity
+            style={[
+              styles.submitButton,
+              (!reportText.trim() || isSubmitting) && styles.submitButtonDisabled
+            ]}
+            onPress={handleSubmit}
+            disabled={isSubmitting || !reportText.trim()}
           >
-            
-            {/* --- HEADER --- */}
-            <View style={styles.header}>
-              <View style={styles.headerSide}>
-                <TouchableOpacity 
-                  onPress={() => navigation.goBack()} 
-                  style={styles.backButton}
-                >
-                  {/* 🔥 "← Settings" TEXT ADDED HERE */}
-                  <Text style={styles.backText}>← Settings</Text> 
-                </TouchableOpacity>
-              </View>
+            {isSubmitting ? (
+              <ActivityIndicator color="#ffffff" size="small" />
+            ) : (
+              <Text style={styles.submitButtonText}>Send Report</Text>
+            )}
+          </TouchableOpacity>
 
-              <View style={styles.headerCenter}>
-                <Text style={styles.headerTitle}>Report Issue</Text>
-              </View>
-
-              {/* Empty view for perfect center alignment */}
-              <View style={styles.headerSide} /> 
-            </View>
-
-            <Text style={styles.subText}>
-              Found a bug or facing a UI issue? Let us know so we can fix it for you.
-            </Text>
-
-            {/* --- TEXT INPUT AREA --- */}
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Describe your issue in detail here..."
-                placeholderTextColor="rgba(255,255,255,0.4)"
-                value={reportText}
-                onChangeText={setReportText}
-                multiline={true}
-                textAlignVertical="top" 
-                editable={!isSubmitting}
-                // 🔥 FIX: Removed autoFocus={true} so keyboard doesn't open automatically
-              />
-            </View>
-
-            {/* --- SUBMIT BUTTON --- */}
-            <TouchableOpacity
-              style={[
-                styles.submitButton,
-                (!reportText.trim() || isSubmitting) && styles.submitButtonDisabled
-              ]}
-              onPress={handleSubmit}
-              disabled={isSubmitting || !reportText.trim()}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="#ffffff" size="small" />
-              ) : (
-                <Text style={styles.submitButtonText}>Send Report</Text>
-              )}
-            </TouchableOpacity>
-
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </LinearGradient>
-    </SafeAreaView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { 
-    flex: 1, 
-    backgroundColor: '#050a14' 
-  },
   container: { 
     flex: 1 
   },
@@ -144,40 +116,12 @@ const styles = StyleSheet.create({
     // 🔥 FIX: Increased bottom padding significantly to keep button above keyboard
     paddingBottom: Platform.OS === 'ios' ? 80 : 60, 
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    marginTop: Platform.OS === 'android' ? 10 : 0,
-  },
-  headerSide: {
-    flex: 1, // Helps keep the title perfectly centered
-    alignItems: 'flex-start',
-  },
-  headerCenter: {
-    flex: 2,
-    alignItems: 'center',
-  },
-  backButton: {
-    paddingVertical: 8,
-    paddingRight: 10,
-  },
-  backText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  headerTitle: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
   subText: {
     color: 'rgba(255,255,255,0.7)', 
     fontSize: 16,
     lineHeight: 24,
     marginBottom: 20,
+    marginTop: 10,
   },
   inputContainer: {
     flex: 1, 
