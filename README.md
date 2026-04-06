@@ -188,7 +188,7 @@ Platform notes:
 
 ## License
 
-Specify your license here (MIT, Apache 2.0, etc.).
+Apache-2.0 license
 
 ## Contributing
 
