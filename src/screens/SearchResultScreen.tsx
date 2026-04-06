@@ -424,8 +424,6 @@
 // });
 
 
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
@@ -636,9 +634,9 @@ export default function SearchResultScreen({ navigation }: any) {
     <LinearGradient colors={['#111111', '#000000']} style={styles.container}>
       
       <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={20}
+        style={styles.container} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
       >
         <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right' , 'bottom']}>
           
@@ -846,6 +844,7 @@ const styles = StyleSheet.create({
   feedMetaRow: { flexDirection: 'row', gap: 14, alignItems: 'center' },
   feedMetaText: { color: '#a0a0a0', fontSize: 12, fontWeight: '500' },
 
+  // 🔥 FIX APPLIED HERE: Adjusted positions for Android seamlessly!
   anchoredSearchContainer: { 
       width: '90%', 
       alignSelf: 'center', 
@@ -855,8 +854,9 @@ const styles = StyleSheet.create({
       alignItems: 'center', 
       paddingHorizontal: 16,
       height: 55,
-      position:'absolute',
-      bottom: Platform.OS === 'ios' ? 50 : 30, 
+      position: Platform.OS === 'ios' ? 'absolute' : 'relative',
+      bottom: Platform.OS === 'ios' ? 50 : 0, 
+      marginBottom: Platform.OS === 'android' ? 30 : 0,
   },
   floatingInput: { flex: 1, color: 'white', fontSize: 16, height: '100%' },
 

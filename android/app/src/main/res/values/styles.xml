@@ -1,4 +1,13 @@
-<resources>
+<!-- <resources>
     <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         </style>
+</resources> -->
+
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        
+        <item name="android:windowBackground">#000000</item>
+    </style>
 </resources>
