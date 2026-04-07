@@ -204,18 +204,18 @@
 //   mainFabOpen: { backgroundColor: '#a393a9' },
 //   mainFabIcon: { color: 'white', fontSize: 32, fontWeight: '300', marginTop: -4 },
 //   mainFabIconOpen: { fontSize: 36, marginTop: -6 }
-// });import React, { useState, useEffect, useRef } from 'react';
+// });
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, TouchableWithoutFeedback, ToastAndroid, TextInput, Modal, Image } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, TouchableWithoutFeedback, ToastAndroid, TextInput, Modal, Animated, Image, Platform, Alert } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import RNFS from 'react-native-fs';
 import { useIsFocused } from '@react-navigation/native';
-import { pick, isCancel } from '@react-native-documents/picker';
+import { pick } from '@react-native-documents/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ALL_MODELS, downloadModel } from '../services/ModelService'; 
 import ModelCard from '../components/ModelCard';
-import NerveSparksDrawer from '../components/NerveSparksDrawer';
+// import NerveSparksDrawer from '../components/NerveSparksDrawer';
 
 export default function ModelsScreen({ navigation }: any) {
   const [fileStates, setFileStates] = useState<Record<string, { exists: boolean, size: string }>>({});
@@ -228,14 +228,40 @@ export default function ModelsScreen({ navigation }: any) {
   const [searchQuery, setSearchQuery] = useState('');
   
   const [loadingModel, setLoadingModel] = useState<string | null>(null);
+  const loadingAnim = useRef(new Animated.Value(0)).current;
 
   const [isFabExpanded, setIsFabExpanded] = useState(false);
   const isFocused = useIsFocused();
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [touchStartX, setTouchStartX] = useState(0);
+  // const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  // const [touchStartX, setTouchStartX] = useState(0);
 
-  const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
-  const handleTouchEnd = (e: any) => { if (e.nativeEvent.pageX - touchStartX > 50) setIsDrawerOpen(true); };
+  // const handleTouchStart = (e: any) => setTouchStartX(e.nativeEvent.pageX);
+  // const handleTouchEnd = (e: any) => { if (e.nativeEvent.pageX - touchStartX > 50) setIsDrawerOpen(true); };
+
+  useEffect(() => {
+    if (loadingModel) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(loadingAnim, { toValue: 1, duration: 1200, useNativeDriver: false }),
+          Animated.timing(loadingAnim, { toValue: 0, duration: 1200, useNativeDriver: false })
+        ])
+      ).start();
+    } else {
+      loadingAnim.stopAnimation();
+      loadingAnim.setValue(0);
+    }
+  }, [loadingModel]);
+
+  const barWidth = loadingAnim.interpolate({ inputRange: [0, 1], outputRange: ['10%', '100%'] });
+
+  // 🔥 UNIVERSAL TOAST FIX FOR iOS & ANDROID
+  const showMessage = (msg: string) => {
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(msg, ToastAndroid.SHORT);
+    } else {
+      Alert.alert("Iris", msg); // iOS me pop-up aayega kyunki native toast nahi hota
+    }
+  };
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -254,23 +280,27 @@ export default function ModelsScreen({ navigation }: any) {
 
       for (const model of ALL_MODELS) {
         const path = `${RNFS.DocumentDirectoryPath}/${model.destination}`;
-        if (await RNFS.exists(path)) states[model.name] = { exists: true, size: formatBytes(Number((await RNFS.stat(path)).size)) };
-        else states[model.name] = { exists: false, size: '0 Bytes' };
+        if (await RNFS.exists(path)) {
+          states[model.name] = { exists: true, size: formatBytes(Number((await RNFS.stat(path)).size)) };
+        } else {
+          states[model.name] = { exists: false, size: '0 Bytes' };
+        }
       }
 
       for (const file of ggufFiles) {
-        if (!ALL_MODELS.find(m => m.name === file.name)) {
+        // 🔥 FIX: MATCH BY DESTINATION INSTEAD OF NAME
+        if (!ALL_MODELS.find(m => m.destination === file.name)) {
           states[file.name] = { exists: true, size: formatBytes(Number(file.size)) };
           custom.push(file.name);
         }
       }
+      
       setFileStates(states);
       setCustomModels(custom);
       
       const savedModel = await AsyncStorage.getItem('ACTIVE_MODEL_NAME');
       if (savedModel) setActiveModel(savedModel);
 
-      // 🔥 FIX: LOAD SAVED DEFAULT MODEL ON STARTUP
       const savedDefault = await AsyncStorage.getItem('DEFAULT_MODEL_NAME');
       if (savedDefault) setDefaultModel(savedDefault);
 
@@ -291,7 +321,7 @@ export default function ModelsScreen({ navigation }: any) {
   const cancelDownload = async (model: any) => {
     setDownloading(prev => ({ ...prev, [model.name]: false }));
     setProgresses(prev => ({ ...prev, [model.name]: 0 }));
-    ToastAndroid.show("Download cancelled", ToastAndroid.SHORT);
+    showMessage("Download cancelled" );
     
     try {
       const destPath = `${RNFS.DocumentDirectoryPath}/${model.destination}`;
@@ -308,7 +338,7 @@ export default function ModelsScreen({ navigation }: any) {
       setActiveModel(modelName);
       setLoadingModel(null);
       await AsyncStorage.setItem('ACTIVE_MODEL_NAME', modelName); 
-      ToastAndroid.show(`${modelName} Loaded!`, ToastAndroid.SHORT);
+      showMessage(`${modelName} Loaded!`);
     }, 2500);
   };
 
@@ -316,7 +346,7 @@ export default function ModelsScreen({ navigation }: any) {
   const handleSetDefault = async (modelName: string) => {
     setDefaultModel(modelName);
     await AsyncStorage.setItem('DEFAULT_MODEL_NAME', modelName);
-    ToastAndroid.show(`${modelName} set as Default!`, ToastAndroid.SHORT);
+    showMessage(`${modelName} set as Default!`);
   };
 
   const pickLocalModel = async () => {
@@ -324,10 +354,10 @@ export default function ModelsScreen({ navigation }: any) {
     try {
       const result = await pick({ mode: 'import' });
       const res = result[0];
-      if (!res || !res.name || !res.name.endsWith('.gguf')) return ToastAndroid.show("Invalid .gguf file", ToastAndroid.SHORT);
+      if (!res || !res.name || !res.name.endsWith('.gguf')) return showMessage("Invalid .gguf file");
       const destPath = `${RNFS.DocumentDirectoryPath}/${res.name}`;
-      if (await RNFS.exists(destPath)) return ToastAndroid.show("Model exists!", ToastAndroid.SHORT);
-      ToastAndroid.show("Importing...", ToastAndroid.LONG);
+      if (await RNFS.exists(destPath)) return showMessage("Model exists!");
+      showMessage("Importing...");
       await RNFS.copyFile(res.uri, destPath);
       checkFiles(); 
     } catch (err: any) { console.log(err); }
@@ -338,7 +368,7 @@ export default function ModelsScreen({ navigation }: any) {
   const filteredCustom = customModels.filter(m => m.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
-    <View style={styles.container} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <View style={styles.container} >
       <LinearGradient colors={['#050a14', '#051633']} style={styles.container}>
         
         <View style={styles.searchContainer}>
@@ -423,8 +453,8 @@ export default function ModelsScreen({ navigation }: any) {
           <Text style={[styles.mainFabIcon, isFabExpanded && styles.mainFabIconOpen]}>{isFabExpanded ? '×' : '+'}</Text>
         </TouchableOpacity>
       </View>
-
-      <NerveSparksDrawer visible={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} activeModelName={activeModel || "No active model"} />
+{/* 
+      <NerveSparksDrawer visible={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} activeModelName={activeModel || "No active model"} /> */}
 
       <Modal visible={!!loadingModel} transparent animationType="fade">
         <View style={styles.loadingScreenOverlay}>

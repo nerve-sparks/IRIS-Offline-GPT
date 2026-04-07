@@ -1,78 +1,199 @@
-# Iris - Offline AI Assistant 🤖
+# Iris - Offline AI Assistant
 
-Iris is a powerful, privacy-first React Native mobile application that runs Large Language Models (LLMs) completely offline on your device's hardware. It leverages `llama.cpp` (via `llama.rn`) to execute `.gguf` models directly on mobile processors without any cloud dependency.
+Iris is a privacy-first React Native mobile application that enables fully offline AI interactions. It runs Large Language Models (LLMs) directly on-device using `llama.cpp` via `llama.rn`, eliminating the need for cloud connectivity and ensuring complete data privacy.
 
-## ✨ Key Features
-* **100% Local Inference:** Chat with AI without an internet connection. No data ever leaves your device.
-* **Hugging Face Integration:** Search, browse, and directly download `.gguf` models from Hugging Face repositories within the app.
-* **Custom Model Import:** Import your own `.gguf` files directly from your phone's local storage.
-* **Advanced File Management:** Real-time download progress tracking, cancelable downloads, and active RAM-loading toggles.
-* **Voice-Enabled:** Integrated Native Speech-to-Text (Mic) and Text-to-Speech (TTS) for hands-free interactions.
+## Overview
 
----
+Iris allows users to download, manage, and run `.gguf` models locally on their mobile devices. With built-in voice capabilities and seamless model handling, it provides a complete offline AI experience.
 
-## 🛑 MUST READ: The Golden Rule of Node Modules
-Because this project relies heavily on native Android C++ code (`llama.rn`, `react-native-fs`), simply running `npm install` is **not enough** when adding or updating packages. 
+## Features
 
-Every time you install a new node module, you MUST clean the Android build cache before running the app again. **Run these exact commands in order:**
+### 100% Local Inference
+- No internet required after setup
+- All processing happens on-device
+- Zero data leaves your device
+
+### Hugging Face Integration
+- Search and browse `.gguf` models
+- Download models directly within the app
+
+### Custom Model Import
+- Import `.gguf` files from local storage
+- Full flexibility over model selection
+
+### Advanced File Management
+- Real-time download progress
+- Cancel downloads anytime
+- RAM load/unload controls for models
+
+### Voice Capabilities
+- Native Speech-to-Text (STT)
+- Text-to-Speech (TTS) responses
+- Hands-free AI interaction
+
+## Tech Stack
+
+- React Native (CLI)
+- `llama.cpp` via `llama.rn`
+- Native Android (C++/NDK)
+- Native iOS integration (CocoaPods/Xcode)
+- Hugging Face integration
+
+## Important: Native Build Rule (Android and iOS)
+
+This project depends on native modules (`llama.rn`, `react-native-fs`, and related platform bindings). After installing or updating any package, you must clean and rebuild native artifacts.
+
+### Required Steps After `npm install` or Package Updates
+
+1. Install package(s):
 
 ```bash
-# 1. Install your new package
 npm install <package-name>
+```
 
-# 2. Navigate to the android folder
+2. Rebuild Android:
+
+```bash
 cd android
-
-# 3. Clean the gradle cache (Windows)
+# Windows
 .\gradlew clean
-# (Mac/Linux users: ./gradlew clean)
-
-# 4. Go back to the root folder
+# macOS/Linux
+./gradlew clean
 cd ..
-
-# 5. Rebuild the entire app
 npx react-native run-android
-🖥️ System & Android Studio Setup
-To build this project, you must have proper knowledge of Android Studio and the React Native CLI setup. This is not an Expo project.
+```
 
-1. React Native CLI Setup:
-You must follow the official React Native CLI Quickstart guide to configure your machine:
-👉 React Native Environment Setup
+3. Rebuild iOS (macOS only):
 
-2. Android Studio Requirements:
+```bash
+cd ios
+pod install
+xcodebuild clean -workspace IrisRN.xcworkspace -scheme IrisRN -configuration Debug
+cd ..
+npx react-native run-ios
+```
 
-Install Android Studio and configure your ANDROID_HOME environment variables.
+> If your iOS workspace or scheme name differs, replace `IrisRN` with your project name.
 
-Open Android Studio -> SDK Manager -> SDK Tools and ensure these are installed:
+Failure to follow these steps may result in build-time or runtime issues.
 
-Android SDK Build-Tools
+## System Requirements
 
-NDK (Side by side) (Critical for compiling the C++ AI engine)
+## React Native CLI Environment Setup
 
-CMake (Critical for compiling llama.rn)
+Ensure your development environment is properly configured:
 
-🚀 How to Build and Run
-Step 1: Clone and Install
-Bash
+- [React Native Environment Setup](https://reactnative.dev/docs/environment-setup)
+
+## Android Requirements
+
+Install Android Studio and configure:
+
+- `ANDROID_HOME` environment variable
+- Android SDK Build-Tools
+- NDK (Side by side) (required)
+- CMake (required)
+
+## iOS Requirements (macOS only)
+
+Install and configure:
+
+- Xcode (latest stable)
+- Xcode Command Line Tools
+- CocoaPods
+- iOS Simulator (optional, for local testing)
+
+Recommended installation commands:
+
+```bash
+xcode-select --install
+sudo gem install cocoapods
+```
+
+## Installation and Setup
+
+## 1) Clone Repository
+
+```bash
 git clone <your-repository-url>
 cd IrisRN
 npm install
-Step 2: Start Metro
-You will need to run Metro, the JavaScript build tool for React Native.
+```
 
-Bash
+## 2) Start Metro Bundler
+
+```bash
 npx react-native start --reset-cache
-Step 3: Build the App
-With Metro running, open a new terminal window/pane from the root of your project, and build the Android app:
+```
 
-Bash
+## 3) Run Application
+
+In a new terminal:
+
+### Android
+
+```bash
 npx react-native run-android
-⚠️ Important Testing Notes
-Hardware Requirements: Running .gguf models requires significant RAM. A 1B to 3B parameter model usually requires 4GB to 6GB of available RAM.
+```
 
-Emulators: If testing on an Android Emulator, you MUST configure the AVD (Android Virtual Device) to have at least 6144 MB (6GB) of RAM. Standard emulators will crash when attempting to load the model into memory. Testing on a physical Android device is highly recommended.
+### iOS (macOS only)
 
-Permissions: The app requires Storage (for downloading/reading models) and Microphone permissions (for Voice-to-Text) to function correctly.
+```bash
+cd ios
+pod install
+cd ..
+npx react-native run-ios
+```
 
+## Testing Guidelines
 
-***
+## Hardware Requirements
+
+- Minimum 4GB-6GB available RAM for 1B-3B models
+- Larger models require more memory
+
+## Emulator / Simulator Setup
+
+### Android Emulator
+
+- Allocate at least 6144 MB (6GB) RAM
+- Default emulator configurations may crash
+
+### iOS Simulator
+
+- Use a recent device profile with sufficient memory
+- Close unused simulators/apps to reduce memory pressure
+
+## Recommendation
+
+Use a physical device for better performance and stability.
+
+## Permissions
+
+The app requires the following permissions:
+
+- Storage access for downloading and managing models
+- Microphone access for speech-to-text functionality
+
+Platform notes:
+- Android: declare and request runtime permissions as needed
+- iOS: define `NSMicrophoneUsageDescription` and relevant file access usage descriptions in `Info.plist`
+
+## Troubleshooting
+
+- **Build fails after dependency update**: run full native clean/rebuild steps for your platform.
+- **Android native errors**: verify NDK and CMake installation in Android Studio SDK Manager.
+- **iOS pod issues**: run `cd ios && pod repo update && pod install`.
+- **Out-of-memory crashes**: reduce model size or use a physical device with more RAM.
+
+## License
+
+Apache-2.0 license
+
+## Contributing
+
+Contributions are welcome. Please ensure:
+
+- Proper testing on real devices
+- Native rebuild steps are followed
+- Code remains clean and maintainable
