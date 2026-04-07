@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import RNFS from 'react-native-fs';
+import ReactNativeBlobUtil from 'react-native-blob-util';
 import { Conversation } from './conversationStore';
 
 const PAGE_WIDTH = 595;
@@ -139,12 +140,23 @@ export async function exportConversationAsPdf(conv: Conversation): Promise<strin
 
   const base64 = await pdfDoc.saveAsBase64();
   const safeFileTitle = conv.title.replace(/[^a-z0-9]/gi, '_').slice(0, 40) || 'conversation';
-  const baseDir =
-    Platform.OS === 'android' && RNFS.DownloadDirectoryPath
-      ? RNFS.DownloadDirectoryPath
-      : RNFS.DocumentDirectoryPath || RNFS.CachesDirectoryPath;
-  const filePath = `${baseDir}/iris_${safeFileTitle}_${Date.now()}.pdf`;
+  const fileName = `iris_${safeFileTitle}_${Date.now()}.pdf`;
+  const tempDir = RNFS.CachesDirectoryPath || RNFS.DocumentDirectoryPath;
+  const tempPath = `${tempDir}/${fileName}`;
 
-  await RNFS.writeFile(filePath, base64, 'base64');
-  return filePath;
+  await RNFS.writeFile(tempPath, base64, 'base64');
+
+  if (Platform.OS === 'android') {
+    return ReactNativeBlobUtil.MediaCollection.copyToMediaStore(
+      {
+        name: fileName,
+        parentFolder: 'IRIS',
+        mimeType: 'application/pdf',
+      },
+      'Download',
+      tempPath
+    );
+  }
+
+  return tempPath;
 }

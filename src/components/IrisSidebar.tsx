@@ -6,7 +6,7 @@ import React, { useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet,
   Animated, Dimensions, TouchableWithoutFeedback, TextInput,
-  StatusBar, Alert, Modal, ScrollView, Linking, Image, Share, Switch,
+  StatusBar, Alert, ScrollView, Linking, Image, Share, Switch,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {
@@ -362,8 +362,16 @@ export default function IrisSidebar({
       </Animated.View>
 
       {/* ── New Folder Modal ── */}
-      <Modal visible={showFolderModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
+      {showFolderModal && (
+        <View style={styles.modalLayer}>
+          <TouchableWithoutFeedback
+            onPress={() => {
+              setShowFolderModal(false);
+              setNewFolderName('');
+            }}
+          >
+            <View style={styles.modalOverlay} />
+          </TouchableWithoutFeedback>
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>New Folder</Text>
             <TextInput
@@ -387,7 +395,10 @@ export default function IrisSidebar({
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.cancelBtn}
-                onPress={() => { setShowFolderModal(false); setNewFolderName(''); }}
+                onPress={() => {
+                  setShowFolderModal(false);
+                  setNewFolderName('');
+                }}
               >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
@@ -401,7 +412,7 @@ export default function IrisSidebar({
             </View>
           </View>
         </View>
-      </Modal>
+      )}
     </View>
   );
 }
@@ -547,13 +558,19 @@ const styles = StyleSheet.create({
 
   // New Folder Modal
   modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(5,10,20,0.85)',
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5,10,20,0.85)',
+  },
+  modalLayer: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center', alignItems: 'center',
+    zIndex: 20,
   },
   modalBox: {
     backgroundColor: '#161d2b', width: '85%',
     borderRadius: 16, padding: 24,
     borderWidth: 1, borderColor: '#1e293b',
+    elevation: 12,
   },
   modalTitle: { color: '#ffffff', fontSize: 17, fontWeight: '700', textAlign: 'center', marginBottom: 16 },
   modalInput: {

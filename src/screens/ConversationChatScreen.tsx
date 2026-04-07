@@ -151,12 +151,6 @@ export default function ConversationChatScreen() {
     const current = msg.activeVariantIndex ?? msg.variants.length - 1;
     const next = Math.max(0, current - 1);
     setActiveVariant(conversationId, messageId, next);
-    if (msg.sender === 'user') {
-      const linkedAssistant = conv?.messages.find(m => m.sender === 'assistant' && m.parentId === messageId);
-      if (linkedAssistant?.variants?.length) {
-        setActiveVariant(conversationId, linkedAssistant.id, Math.min(next, linkedAssistant.variants.length - 1));
-      }
-    }
   };
 
   const handleNextVariant = (messageId: string) => {
@@ -166,12 +160,6 @@ export default function ConversationChatScreen() {
     const current = msg.activeVariantIndex ?? msg.variants.length - 1;
     const next = Math.min(msg.variants.length - 1, current + 1);
     setActiveVariant(conversationId, messageId, next);
-    if (msg.sender === 'user') {
-      const linkedAssistant = conv?.messages.find(m => m.sender === 'assistant' && m.parentId === messageId);
-      if (linkedAssistant?.variants?.length) {
-        setActiveVariant(conversationId, linkedAssistant.id, Math.min(next, linkedAssistant.variants.length - 1));
-      }
-    }
   };
 
   useEffect(() => {

@@ -6,6 +6,7 @@
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "lint": "eslint .",
+    "postinstall": "node scripts/fix-react-native-voice-gradle.js",
     "start": "react-native start",
     "test": "jest"
   },
@@ -27,8 +28,10 @@
     "react-native-device-info": "^15.0.2",
     "react-native-fs": "^2.20.0",
     "react-native-linear-gradient": "^2.8.3",
+    "react-native-markdown-display": "^7.0.2",
     "react-native-safe-area-context": "^5.7.0",
     "react-native-screens": "^4.24.0",
+    "react-native-svg": "^15.15.4",
     "react-native-tts": "^4.1.1",
     "yarn": "^1.22.22"
   },

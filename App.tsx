@@ -1,11 +1,10 @@
-// App.tsx — Updated with Conversation Management Feature
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { loadStore } from './src/services/conversationStore';
 import { IncognitoProvider } from './src/services/incognitoContext';
 
-// Existing screens
 import ChatScreen from './src/screens/ChatScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ModelsScreen from './src/screens/ModelsScreen';
@@ -13,8 +12,6 @@ import ParametersScreen from './src/screens/ParametersScreen';
 import BenchmarkScreen from './src/screens/BenchmarkScreen';
 import AboutScreen from './src/screens/AboutScreen';
 import SearchResultScreen from './src/screens/SearchResultScreen';
-
-// ── NEW: Conversation Management Screens ──────────────────────────────────────
 import ConversationListScreen from './src/screens/ConversationListScreen';
 import FoldersScreen from './src/screens/FoldersScreen';
 import ConversationChatScreen from './src/screens/ConversationChatScreen';
@@ -28,59 +25,126 @@ const headerStyle = {
 };
 
 export default function App() {
-  const [ready, setReady] = React.useState(false);
+  const [ready, setReady] = useState(false);
+  const [bootError, setBootError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadStore().then(() => setReady(true));
+    let isMounted = true;
+
+    const bootstrap = async () => {
+      try {
+        await loadStore();
+      } catch (error) {
+        if (isMounted) {
+          setBootError(
+            error instanceof Error ? error.message : 'Failed to load saved conversations.'
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setReady(true);
+        }
+      }
+    };
+
+    void bootstrap();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  if (!ready) return null;
+  if (!ready) {
+    return (
+      <View style={styles.bootScreen}>
+        <ActivityIndicator size="large" color="#2563EB" />
+        <Text style={styles.bootTitle}>Starting Iris</Text>
+        <Text style={styles.bootSubtitle}>Loading saved chats and app state...</Text>
+      </View>
+    );
+  }
 
   return (
     <IncognitoProvider>
       <NavigationContainer>
-        <Stack.Navigator screenOptions={headerStyle}>
-
-        {/* ── Chat is HOME screen (like ChatGPT) ── */}
-        <Stack.Screen
-          name="Chat"
-          component={ChatScreen}
-          options={{ headerShown: false }}
-        />
-
-        {/* ── Conversation List (opened from chat via 📝 button) ── */}
-        <Stack.Screen
-          name="ConversationList"
-          component={ConversationListScreen}
-          options={{ headerShown: false }}
-        />
-
-        {/* ── Opening a conversation from list → goes to Chat ── */}
-        <Stack.Screen
-          name="ConversationChat"
-          component={ConversationChatScreen}
-          options={{ headerShown: false }}
-        />
-
-        <Stack.Screen
-          name="FoldersScreen"
-          component={FoldersScreen}
-          options={{ title: 'Folders' }}
-        />
-
-        {/* ── Existing Screens ── */}
-        <Stack.Screen name="Settings" component={SettingsScreen} />
-        <Stack.Screen name="Models" component={ModelsScreen} />
-        <Stack.Screen name="Parameters" component={ParametersScreen} />
-        <Stack.Screen name="Benchmark" component={BenchmarkScreen} />
-        <Stack.Screen name="About" component={AboutScreen} />
-        <Stack.Screen
-          name="SearchResult"
-          component={SearchResultScreen}
-          options={{ title: 'Search Models' }}
-        />
-        </Stack.Navigator>
+        <View style={styles.appShell}>
+          {!!bootError && (
+            <View style={styles.bootErrorBanner}>
+              <Text style={styles.bootErrorText}>{bootError}</Text>
+            </View>
+          )}
+          <Stack.Navigator screenOptions={headerStyle}>
+            <Stack.Screen
+              name="Chat"
+              component={ChatScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="ConversationList"
+              component={ConversationListScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="ConversationChat"
+              component={ConversationChatScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="FoldersScreen"
+              component={FoldersScreen}
+              options={{ title: 'Folders' }}
+            />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="Models" component={ModelsScreen} />
+            <Stack.Screen name="Parameters" component={ParametersScreen} />
+            <Stack.Screen name="Benchmark" component={BenchmarkScreen} />
+            <Stack.Screen name="About" component={AboutScreen} />
+            <Stack.Screen
+              name="SearchResult"
+              component={SearchResultScreen}
+              options={{ title: 'Search Models' }}
+            />
+          </Stack.Navigator>
+        </View>
       </NavigationContainer>
     </IncognitoProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  appShell: {
+    flex: 1,
+    backgroundColor: '#050a14',
+  },
+  bootScreen: {
+    flex: 1,
+    backgroundColor: '#050a14',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  bootTitle: {
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: '700',
+    marginTop: 18,
+  },
+  bootSubtitle: {
+    color: '#94a3b8',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  bootErrorBanner: {
+    backgroundColor: 'rgba(127,29,29,0.95)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(248,113,113,0.4)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  bootErrorText: {
+    color: '#fecaca',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+});

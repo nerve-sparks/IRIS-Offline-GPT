@@ -15,6 +15,7 @@ export interface Message {
   variants?: Message[];        // alternate versions of the same message
   activeVariantIndex?: number; // which variant index is currently shown (0-based)
   editedFrom?: string;         // original text before an edit
+  sourceVariantIndex?: number; // user branch this assistant variant belongs to
 }
 
 export interface Conversation {
@@ -145,6 +146,17 @@ const normalizeMessage = (message: Message): Message => ({
   })) : undefined,
   activeVariantIndex: message.activeVariantIndex ?? (message.variants && message.variants.length > 0 ? message.variants.length - 1 : undefined),
 });
+
+const getLatestAssistantVariantIndexForUserVariant = (
+  message: Message,
+  userVariantIndex: number
+): number => {
+  const variants = message.variants ?? [message];
+  for (let i = variants.length - 1; i >= 0; i -= 1) {
+    if ((variants[i].sourceVariantIndex ?? 0) === userVariantIndex) return i;
+  }
+  return Math.max(0, Math.min(userVariantIndex, variants.length - 1));
+};
 
 const normalizeConversation = (conversation: Conversation): Conversation => ({
   ...conversation,
@@ -380,7 +392,7 @@ const aiReplies = [
 ];
 
 export const simulateAIReply = async (conversationId: string): Promise<Message> => {
-  await new Promise(r => setTimeout(r, 900 + Math.random() * 600));
+  await new Promise<void>(resolve => setTimeout(resolve, 900 + Math.random() * 600));
   const reply = aiReplies[Math.floor(Math.random() * aiReplies.length)];
   return addMessage(conversationId, reply, 'assistant');
 };
@@ -399,6 +411,8 @@ export const addMessageVariant = (
   let result: Message | null = null;
   _conversations = _conversations.map(c => {
     if (c.id !== conversationId) return c;
+    const userMessage = c.messages.find(m => m.id === userMsgId);
+    const sourceVariantIndex = userMessage?.activeVariantIndex ?? 0;
     const messages = c.messages.map(m => {
       if (m.parentId !== userMsgId || m.sender !== 'assistant') return m;
       const newVariant: Message = {
@@ -409,10 +423,11 @@ export const addMessageVariant = (
         isStarred: false,
         isPinned: false,
         parentId: userMsgId,
+        sourceVariantIndex,
       };
       result = newVariant;
       const variants = [...(m.variants ?? [m]), newVariant];
-      return { ...m, variants, activeVariantIndex: variants.length - 1 };
+      return { ...m, text, variants, activeVariantIndex: variants.length - 1 };
     });
     return { ...c, messages };
   });
@@ -431,12 +446,36 @@ export const setActiveVariant = (
 ): void => {
   _conversations = _conversations.map(c => {
     if (c.id !== conversationId) return c;
+    const target = c.messages.find(m => m.id === messageId);
+    if (!target) return c;
+
+    const total = target.variants ? target.variants.length : 1;
+    const clamped = Math.max(0, Math.min(index, total - 1));
+    const linkedAssistant =
+      target.sender === 'user'
+        ? c.messages.find(m => m.sender === 'assistant' && m.parentId === messageId)
+        : null;
+    const linkedAssistantIndex =
+      linkedAssistant && (linkedAssistant.variants?.length ?? 0) > 0
+        ? getLatestAssistantVariantIndexForUserVariant(linkedAssistant, clamped)
+        : null;
+
     const messages = c.messages.map(m => {
-      if (m.id !== messageId) return m;
-      const total = m.variants ? m.variants.length : 1;
-      const clamped = Math.max(0, Math.min(index, total - 1));
-      const nextText = m.variants?.[clamped]?.text ?? m.text;
-      return { ...m, text: nextText, activeVariantIndex: clamped };
+      if (m.id === messageId) {
+        const nextText = m.variants?.[clamped]?.text ?? m.text;
+        return { ...m, text: nextText, activeVariantIndex: clamped };
+      }
+
+      if (
+        linkedAssistant &&
+        linkedAssistantIndex !== null &&
+        m.id === linkedAssistant.id
+      ) {
+        const nextText = m.variants?.[linkedAssistantIndex]?.text ?? m.text;
+        return { ...m, text: nextText, activeVariantIndex: linkedAssistantIndex };
+      }
+
+      return m;
     });
     return { ...c, messages };
   });

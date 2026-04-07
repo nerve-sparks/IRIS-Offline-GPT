@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet,
   KeyboardAvoidingView, Platform, Keyboard, Image, ToastAndroid, NativeModules,
+  Share, Alert,
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import RNFS from 'react-native-fs';
+import ReactNativeBlobUtil from 'react-native-blob-util';
 import { initLlama } from 'llama.rn';
 import Voice, { SpeechResultsEvent } from '@react-native-voice/voice';
 import Tts from 'react-native-tts';
@@ -26,8 +28,9 @@ import {
   setActiveVariant,
   editUserMessage,
   forkConversation,
+  exportConversation as buildConversationExport,
 } from '../services/conversationStore';
-import { showConversationExportMenu } from '../services/conversationExport';
+import { exportConversationAsPdf } from '../services/pdfExport';
 import { useIncognito } from '../services/incognitoContext';
 import { addTempMessage, endTempSession } from '../services/tempChatStore';
 // ── Inline PDF/HTML builder — generates a shareable HTML file, no extra deps
@@ -60,6 +63,39 @@ ${rows}
   const filePath = `${RNFS.CachesDirectoryPath}/iris_${safeTitle}_${Date.now()}.html`;
   await RNFS.writeFile(filePath, html, 'utf8');
   return filePath;
+};
+
+const buildTextExportFile = async (
+  title: string,
+  content: string,
+  extension: 'json' | 'md' | 'txt'
+): Promise<string> => {
+  const safeTitle = title.replace(/[^a-z0-9]/gi, '_').slice(0, 30) || 'conversation';
+  const fileName = `iris_${safeTitle}_${Date.now()}.${extension}`;
+  const tempDir = RNFS.CachesDirectoryPath || RNFS.DocumentDirectoryPath;
+  const tempPath = `${tempDir}/${fileName}`;
+  await RNFS.writeFile(tempPath, content, 'utf8');
+
+  if (Platform.OS === 'android') {
+    const mimeType =
+      extension === 'json'
+        ? 'application/json'
+        : extension === 'md'
+          ? 'text/markdown'
+          : 'text/plain';
+    const uri = await ReactNativeBlobUtil.MediaCollection.copyToMediaStore(
+      {
+        name: fileName,
+        parentFolder: 'IRIS',
+        mimeType,
+      },
+      'Download',
+      tempPath
+    );
+    return uri;
+  }
+
+  return tempPath;
 };
 
 interface Message {
@@ -100,6 +136,7 @@ export default function ChatScreen({ navigation }: any) {
   const [editingMessage, setEditingMessage] = useState<{ id: string; text: string } | null>(null);
   const [engineError, setEngineError] = useState<string | null>(null);
   const [regeneratingMsgId, setRegeneratingMsgId] = useState<string | null>(null);
+  const [isExportSheetOpen, setIsExportSheetOpen] = useState(false);
   const activeConversationId = useRef<string | null>(null);
   const pendingFolderId = useRef<string | null>(null);
   const [currentActiveModel, setCurrentActiveModel] = useState("No active model");
@@ -255,15 +292,103 @@ export default function ChatScreen({ navigation }: any) {
   const handleExportCurrentConversation = () => {
     const convId = activeConversationId.current;
     if (!convId) {
-      ToastAndroid.show('No conversation to export yet.', ToastAndroid.SHORT);
+      Alert.alert('Export', 'No conversation to export yet.');
       return;
     }
     const conv = getConversation(convId);
     if (!conv) {
-      ToastAndroid.show('Conversation not found.', ToastAndroid.SHORT);
+      Alert.alert('Export', 'Conversation not found.');
       return;
     }
-    showConversationExportMenu(conv);
+    setIsExportSheetOpen(true);
+  };
+
+  const closeExportSheet = () => setIsExportSheetOpen(false);
+
+  const getActiveConversationForExport = () => {
+    const convId = activeConversationId.current;
+    if (!convId) return null;
+    return getConversation(convId);
+  };
+
+  const handleTextExport = async (format: 'json' | 'markdown' | 'text') => {
+    const conv = getActiveConversationForExport();
+    if (!conv) {
+      Alert.alert('Export', 'Conversation not found.');
+      return;
+    }
+    try {
+      const content = buildConversationExport(conv.id, format);
+      if (!content.trim()) {
+        Alert.alert('Export', 'There is nothing to export yet.');
+        return;
+      }
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(`Preparing ${format} export...`, ToastAndroid.SHORT);
+      }
+      const extension = format === 'markdown' ? 'md' : format === 'text' ? 'txt' : 'json';
+      const mimeType =
+        format === 'text'
+          ? 'text/plain'
+          : 'text/plain';
+      const filePath = await buildTextExportFile(conv.title, content, extension);
+      closeExportSheet();
+      if (Platform.OS === 'android') {
+        try {
+          await ReactNativeBlobUtil.android.actionViewIntent(filePath, mimeType, 'Open export');
+        } catch {
+          Alert.alert('Export complete', `Saved to:\n${filePath}`);
+        }
+        return;
+      }
+      await Share.share({
+        url: `file://${filePath}`,
+        title: conv.title,
+        message: conv.title,
+      });
+    } catch (e: any) {
+      console.error(`Text export failed (${format}):`, e);
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(`Export failed: ${e?.message ?? 'unknown error'}`, ToastAndroid.LONG);
+        return;
+      }
+      Alert.alert('Export Error', e?.message ?? 'Failed to export conversation');
+    }
+  };
+
+  const handlePdfExport = async () => {
+    const conv = getActiveConversationForExport();
+    if (!conv) {
+      Alert.alert('Export', 'Conversation not found.');
+      return;
+    }
+    try {
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Preparing PDF export...', ToastAndroid.SHORT);
+      }
+      const filePath = await exportConversationAsPdf(conv);
+      closeExportSheet();
+      if (Platform.OS === 'android') {
+        try {
+          await ReactNativeBlobUtil.android.actionViewIntent(filePath, 'application/pdf', 'Open PDF export');
+        } catch {
+          Alert.alert('Export complete', `Saved to:\n${filePath}`);
+        }
+        return;
+      }
+      await Share.share({
+        url: `file://${filePath}`,
+        title: conv.title,
+        message: conv.title,
+      });
+    } catch (e: any) {
+      console.error('PDF export failed:', e);
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(`PDF export failed: ${e?.message ?? 'unknown error'}`, ToastAndroid.LONG);
+        return;
+      }
+      Alert.alert('Export Error', e?.message ?? 'Failed to export PDF');
+    }
   };
 
   const handleToggleStarMessage = (messageId: string) => {
@@ -496,26 +621,20 @@ export default function ChatScreen({ navigation }: any) {
     const current = msg.activeVariantIndex ?? msg.variants.length - 1;
     const next = Math.max(0, current - 1);
     setActiveVariant(convId, assistantMsgId, next);
-    setMessages(prev => {
-      const updated = prev.map(m =>
-        m.id === assistantMsgId
-          ? { ...m, activeVariantIndex: next, text: m.variants?.[next]?.text ?? m.text }
-          : m
-      );
-      if (msg.isUser) {
-        const linkedAssistant = updated.find(m => !m.isUser && m.parentId === assistantMsgId);
-        if (linkedAssistant?.variants?.length) {
-          const linkedIndex = Math.min(next, linkedAssistant.variants.length - 1);
-          setActiveVariant(convId, linkedAssistant.id, linkedIndex);
-          return updated.map(m =>
-            m.id === linkedAssistant.id
-              ? { ...m, activeVariantIndex: linkedIndex, text: m.variants?.[linkedIndex]?.text ?? m.text }
-              : m
-          );
-        }
-      }
-      return updated;
-    });
+    const refreshed = getConversation(convId);
+    if (!refreshed) return;
+    setMessages(refreshed.messages.map(m => ({
+      id: m.id,
+      text: m.text,
+      isUser: m.sender === 'user',
+      timestamp: m.timestamp,
+      isStarred: m.isStarred,
+      isPinned: m.isPinned,
+      parentId: m.parentId,
+      variants: m.variants as any,
+      activeVariantIndex: m.activeVariantIndex,
+      editedFrom: m.editedFrom,
+    })));
   };
 
   const handleNextVariant = (assistantMsgId: string) => {
@@ -526,26 +645,20 @@ export default function ChatScreen({ navigation }: any) {
     const current = msg.activeVariantIndex ?? msg.variants.length - 1;
     const next = Math.min(msg.variants.length - 1, current + 1);
     setActiveVariant(convId, assistantMsgId, next);
-    setMessages(prev => {
-      const updated = prev.map(m =>
-        m.id === assistantMsgId
-          ? { ...m, activeVariantIndex: next, text: m.variants?.[next]?.text ?? m.text }
-          : m
-      );
-      if (msg.isUser) {
-        const linkedAssistant = updated.find(m => !m.isUser && m.parentId === assistantMsgId);
-        if (linkedAssistant?.variants?.length) {
-          const linkedIndex = Math.min(next, linkedAssistant.variants.length - 1);
-          setActiveVariant(convId, linkedAssistant.id, linkedIndex);
-          return updated.map(m =>
-            m.id === linkedAssistant.id
-              ? { ...m, activeVariantIndex: linkedIndex, text: m.variants?.[linkedIndex]?.text ?? m.text }
-              : m
-          );
-        }
-      }
-      return updated;
-    });
+    const refreshed = getConversation(convId);
+    if (!refreshed) return;
+    setMessages(refreshed.messages.map(m => ({
+      id: m.id,
+      text: m.text,
+      isUser: m.sender === 'user',
+      timestamp: m.timestamp,
+      isStarred: m.isStarred,
+      isPinned: m.isPinned,
+      parentId: m.parentId,
+      variants: m.variants as any,
+      activeVariantIndex: m.activeVariantIndex,
+      editedFrom: m.editedFrom,
+    })));
   };
 
   const handleTogglePinConversation = () => {
@@ -783,7 +896,12 @@ export default function ChatScreen({ navigation }: any) {
               <Text style={styles.exportText}>Pin</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={handleExportCurrentConversation}
+              onPress={() => {
+                if (Platform.OS === 'android') {
+                  ToastAndroid.show('Export tapped', ToastAndroid.SHORT);
+                }
+                handleExportCurrentConversation();
+              }}
               style={{ padding: 10 }}
               hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
             >
@@ -956,6 +1074,29 @@ export default function ChatScreen({ navigation }: any) {
           await handleEditMessage(editId, newText);
         }}
       />
+      {isExportSheetOpen && (
+        <View style={styles.exportOverlay}>
+          <TouchableOpacity style={styles.exportBackdrop} activeOpacity={1} onPress={closeExportSheet} />
+          <View style={styles.exportSheet}>
+            <Text style={styles.exportSheetTitle}>Export Conversation</Text>
+            <TouchableOpacity style={styles.exportActionBtn} onPress={() => handleTextExport('json')}>
+              <Text style={styles.exportActionBtnText}>JSON</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.exportActionBtn} onPress={() => handleTextExport('markdown')}>
+              <Text style={styles.exportActionBtnText}>Markdown</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.exportActionBtn} onPress={() => handleTextExport('text')}>
+              <Text style={styles.exportActionBtnText}>Plain Text</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.exportActionBtn} onPress={handlePdfExport}>
+              <Text style={styles.exportActionBtnText}>PDF</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.exportActionBtn, styles.exportCancelBtn]} onPress={closeExportSheet}>
+              <Text style={styles.exportCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
       <IrisSidebar
         visible={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -1011,6 +1152,49 @@ const styles = StyleSheet.create({
   incognitoText: { color: '#c4b5fd', fontSize: 12, fontWeight: '500', letterSpacing: 0.3 },
   headerIcons: { flexDirection: 'row', gap: 24 },
   exportText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
+  exportOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(2,6,23,0.45)',
+    justifyContent: 'flex-end',
+  },
+  exportBackdrop: { flex: 1 },
+  exportSheet: {
+    backgroundColor: '#111827',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  exportSheetTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 14,
+  },
+  exportActionBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#1f2937',
+    marginTop: 10,
+  },
+  exportActionBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  exportCancelBtn: {
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    marginTop: 14,
+  },
+  exportCancelBtnText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   headerIconImage: { width: 24, height: 24, tintColor: '#ffffff' },
   micIconImage: { width: 24, height: 24, tintColor: '#ffffff', marginRight: 12 },
   sendIconImage: { width: 24, height: 24, tintColor: '#ffffff', marginLeft: 12 },

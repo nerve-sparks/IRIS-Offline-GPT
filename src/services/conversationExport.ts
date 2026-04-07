@@ -8,20 +8,27 @@ async function shareTextExport(
   format: 'json' | 'markdown' | 'text'
 ) {
   const content = exportConversation(conversationId, format);
+  if (!content.trim()) {
+    throw new Error('There is nothing to export for this conversation yet.');
+  }
   await Share.share({ message: content, title });
 }
 
 async function sharePdfExport(conversation: Conversation) {
   const filePath = await exportConversationAsPdf(conversation);
-  if (Platform.OS === 'android') {
-    Alert.alert('PDF Saved', `Saved to:\n${filePath}`);
-    return;
+  try {
+    await Share.share({
+      url: `file://${filePath}`,
+      title: conversation.title,
+      message: conversation.title,
+    });
+  } catch (shareError) {
+    if (Platform.OS === 'android') {
+      Alert.alert('PDF Saved', `Saved to:\n${filePath}`);
+      return;
+    }
+    throw shareError;
   }
-  await Share.share({
-    url: `file://${filePath}`,
-    title: conversation.title,
-    message: conversation.title,
-  });
 }
 
 function showMoreFormats(conversation: Conversation) {
@@ -29,7 +36,11 @@ function showMoreFormats(conversation: Conversation) {
     {
       text: 'Plain Text',
       onPress: async () => {
-        await shareTextExport(conversation.id, conversation.title, 'text');
+        try {
+          await shareTextExport(conversation.id, conversation.title, 'text');
+        } catch (e: any) {
+          Alert.alert('Export Error', e?.message ?? 'Failed to export text');
+        }
       },
     },
     {
@@ -50,17 +61,25 @@ function showMoreFormats(conversation: Conversation) {
 }
 
 export function showConversationExportMenu(conversation: Conversation) {
-  Alert.alert('Export Conversation', 'Choose format:', [
+  const buttons = [
     {
       text: 'JSON',
       onPress: async () => {
-        await shareTextExport(conversation.id, conversation.title, 'json');
+        try {
+          await shareTextExport(conversation.id, conversation.title, 'json');
+        } catch (e: any) {
+          Alert.alert('Export Error', e?.message ?? 'Failed to export JSON');
+        }
       },
     },
     {
       text: 'Markdown',
       onPress: async () => {
-        await shareTextExport(conversation.id, conversation.title, 'markdown');
+        try {
+          await shareTextExport(conversation.id, conversation.title, 'markdown');
+        } catch (e: any) {
+          Alert.alert('Export Error', e?.message ?? 'Failed to export Markdown');
+        }
       },
     },
     {
@@ -69,5 +88,13 @@ export function showConversationExportMenu(conversation: Conversation) {
         showMoreFormats(conversation);
       },
     },
-  ]);
+  ] as const;
+
+  Alert.alert(
+    'Export Conversation',
+    'Choose format:',
+    Platform.OS === 'android'
+      ? [...buttons]
+      : [...buttons, { text: 'Cancel', style: 'cancel' as const }]
+  );
 }
